@@ -32,8 +32,8 @@ end
 * `borrows` compiles to `belongs_to` with a `:__borrows__` marker — same
   options and defaults as `belongs_to`; required/optional (`allow_nil?`) and
   exposure (`public?`) stay fully configurable. Shorthands set both:
-  `req_borrows` (`false`/`true`), `req_prv_borrows` (`false`/`false`),
-  `opt_borrows` (`true`/`true`), `opt_prv_borrows` (`true`/`false`) —
+  `req_borrows` (`false`/`true`), `req_priv_borrows` (`false`/`false`),
+  `opt_borrows` (`true`/`true`), `opt_priv_borrows` (`true`/`false`) —
   mirroring `ash_req_opt`'s `belongs_to` variants.
 * `borrowed_by` compiles to `has_many` with a `:__borrowed_by__` marker.
   It supports no `filter` — the archive guard must see every borrower.

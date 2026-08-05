@@ -18,17 +18,17 @@ defmodule AshBorrow.Borrower do
   | ------------------- | ------------ | --------- |
   | `borrows`           | belongs_to defaults      ||
   | `req_borrows`       | `false`      | `true`    |
-  | `req_prv_borrows`   | `false`      | `false`   |
+  | `req_priv_borrows`   | `false`      | `false`   |
   | `opt_borrows`       | `true`       | `true`    |
-  | `opt_prv_borrows`   | `true`       | `false`   |
+  | `opt_priv_borrows`   | `true`       | `false`   |
   """
 
   @borrows_variants [
     {:borrows, nil, nil},
     {:req_borrows, false, true},
-    {:req_prv_borrows, false, false},
+    {:req_priv_borrows, false, false},
     {:opt_borrows, true, true},
-    {:opt_prv_borrows, true, false}
+    {:opt_priv_borrows, true, false}
   ]
 
   @borrows_entities Enum.map(@borrows_variants, fn {name, allow_nil?, public?} ->

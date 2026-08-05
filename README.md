@@ -60,9 +60,9 @@ Since Ash defaults `public?` to `false`, shorthands mirroring `ash_req_opt`'s
 | ----------------- | ------------------- | --------- |
 | `borrows`         | belongs_to defaults             ||
 | `req_borrows`     | `false`             | `true`    |
-| `req_prv_borrows` | `false`             | `false`   |
+| `req_priv_borrows` | `false`             | `false`   |
 | `opt_borrows`     | `true`              | `true`    |
-| `opt_prv_borrows` | `true`              | `false`   |
+| `opt_priv_borrows` | `true`              | `false`   |
 
 ## The invariant
 

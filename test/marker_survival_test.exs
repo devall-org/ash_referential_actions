@@ -58,7 +58,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
     assert rel.public? == true
   end
 
-  test "req/opt and pub/prv variants set allow_nil? and public?" do
+  test "req/opt and pub/priv variants set allow_nil? and public?" do
     defmodule VariantSnapshot do
       @moduledoc false
       use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
@@ -72,7 +72,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
       end
 
       relationships do
-        for name <- [:req_docs, :req_prv_docs, :opt_docs, :opt_prv_docs] do
+        for name <- [:req_docs, :req_priv_docs, :opt_docs, :opt_priv_docs] do
           borrowed_by name, AshBorrow.MarkerSurvivalTest.VariantDoc do
             destination_attribute :"#{name}_snapshot_id"
           end
@@ -94,17 +94,17 @@ defmodule AshBorrow.MarkerSurvivalTest do
 
       relationships do
         req_borrows :req_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
-        req_prv_borrows :req_prv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
+        req_priv_borrows :req_priv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
         opt_borrows :opt_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
-        opt_prv_borrows :opt_prv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
+        opt_priv_borrows :opt_priv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
       end
     end
 
     expected = %{
       req_docs_snapshot: {false, true},
-      req_prv_docs_snapshot: {false, false},
+      req_priv_docs_snapshot: {false, false},
       opt_docs_snapshot: {true, true},
-      opt_prv_docs_snapshot: {true, false}
+      opt_priv_docs_snapshot: {true, false}
     }
 
     for {name, {allow_nil?, public?}} <- expected do
