@@ -24,6 +24,17 @@ defmodule AshBorrow.Borrowable.AddGuard do
 
   @impl true
   def transform(dsl_state) do
+    # Nothing to enumerate without borrowed_by edges. A borrowable that is
+    # actually borrowed always has them (the borrower-side verifier requires
+    # a matching one), so skipping here only spares resources nobody borrows.
+    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.borrowed_by?/1) do
+      add_guard(dsl_state)
+    else
+      {:ok, dsl_state}
+    end
+  end
+
+  defp add_guard(dsl_state) do
     dsl_state
     |> Transformer.get_entities([:actions])
     |> Enum.filter(&(&1.type == :destroy))

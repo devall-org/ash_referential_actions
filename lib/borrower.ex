@@ -10,34 +10,73 @@ defmodule AshBorrow.Borrower do
   can tell borrows apart from containment `belongs_to` relationships.
 
   Whether the reference is required (`allow_nil?`) or exposed (`public?`) is
-  orthogonal to borrowing and stays fully configurable, exactly as on
-  `belongs_to`.
+  orthogonal to borrowing, so `borrows` leaves both fully configurable. Ash
+  defaults `public?` to `false`, so shorthands mirroring `ash_req_opt`'s
+  `belongs_to` variants are provided:
+
+  | entity              | `allow_nil?` | `public?` |
+  | ------------------- | ------------ | --------- |
+  | `borrows`           | belongs_to defaults      ||
+  | `req_borrows`       | `false`      | `true`    |
+  | `req_prv_borrows`   | `false`      | `false`   |
+  | `opt_borrows`       | `true`       | `true`    |
+  | `opt_prv_borrows`   | `true`       | `false`   |
   """
 
-  @borrows %Spark.Dsl.Entity{
-    name: :borrows,
-    describe: """
-    Declares a non-owning reference (a borrow) to a borrowable resource.
+  @borrows_variants [
+    {:borrows, nil, nil},
+    {:req_borrows, false, true},
+    {:req_prv_borrows, false, false},
+    {:opt_borrows, true, true},
+    {:opt_prv_borrows, true, false}
+  ]
 
-    Compiles to a `belongs_to` with identical options and defaults.
-    The destination must use the `AshBorrow.Borrowable` extension.
-    """,
-    examples: [
-      """
-      borrows :template, Template
-      """
-    ],
-    no_depend_modules: [:destination],
-    target: Ash.Resource.Relationships.BelongsTo,
-    schema: Ash.Resource.Relationships.BelongsTo.opt_schema(),
-    transform: {__MODULE__, :transform, []},
-    args: [:name, :destination]
-  }
+  @borrows_entities Enum.map(@borrows_variants, fn {name, allow_nil?, public?} ->
+                      fixed =
+                        [allow_nil?: allow_nil?, public?: public?]
+                        |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+                      describe =
+                        case fixed do
+                          [] ->
+                            "identical options and defaults"
+
+                          fixed ->
+                            Enum.map_join(fixed, " and ", fn {key, value} ->
+                              "`#{key}: #{value}`"
+                            end)
+                        end
+
+                      %Spark.Dsl.Entity{
+                        name: name,
+                        describe: """
+                        Declares a non-owning reference (a borrow) to a borrowable resource.
+
+                        Compiles to a `belongs_to` with #{describe}.
+                        The destination must use the `AshBorrow.Borrowable` extension.
+                        """,
+                        examples: [
+                          """
+                          #{name} :template, Template
+                          """
+                        ],
+                        no_depend_modules: [:destination],
+                        target: Ash.Resource.Relationships.BelongsTo,
+                        schema:
+                          Ash.Resource.Relationships.BelongsTo.opt_schema()
+                          |> Keyword.drop(Keyword.keys(fixed)),
+                        transform: {__MODULE__, :transform, []},
+                        args: [:name, :destination],
+                        auto_set_fields: fixed
+                      }
+                    end)
 
   use Spark.Dsl.Extension,
-    dsl_patches: [
-      %Spark.Dsl.Patch.AddEntity{section_path: [:relationships], entity: @borrows}
-    ],
+    dsl_patches:
+      Enum.map(
+        @borrows_entities,
+        &%Spark.Dsl.Patch.AddEntity{section_path: [:relationships], entity: &1}
+      ),
     transformers: [AshBorrow.Borrower.AddTargetGuard],
     verifiers: [
       AshBorrow.Verifiers.BorrowsTargetBorrowable,

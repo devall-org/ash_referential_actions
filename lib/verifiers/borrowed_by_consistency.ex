@@ -84,49 +84,62 @@ defmodule AshBorrow.Verifiers.BorrowedByConsistency do
   # `queried` is what the guard will read through `rel`: the destination
   # module for the borrows edge, this resource's dsl_state for the reverse.
   defp verify_channel(module, rel, queried, queried_name, path_name) do
+    case resolve_channel_action(rel, queried) do
+      {:ok, action} ->
+        if AshBorrow.Query.unclean_read_action?(action) do
+          {:error,
+           channel_error(module, path_name, """
+           The read action `:#{action.name}` of #{inspect(queried_name)}, which the \
+           guard for `#{rel_label(rel)}` queries through, carries filters, \
+           preparations, or required arguments. Those would hide physically live \
+           rows from the guard.
+
+           Point the relationship at a read action suitable for existence checks:
+
+             #{rel_label(rel)} do
+               read_action :name_of_unfiltered_read
+             end
+
+           Note that other extensions may assign `read_action` for you — check \
+           whether one did, and opt this relationship out of it if so.
+           """)}
+        else
+          :ok
+        end
+
+      {:error, message} ->
+        {:error, channel_error(module, path_name, message)}
+    end
+  end
+
+  defp resolve_channel_action(rel, queried) do
     case rel.read_action do
       nil ->
-        primary = Ash.Resource.Info.primary_action(queried, :read)
-
-        cond do
-          primary == nil ->
+        case Ash.Resource.Info.primary_action(queried, :read) do
+          nil ->
             {:error,
-             channel_error(module, path_name, """
-             #{inspect(queried_name)} has no primary read action, so the guard for \
+             """
+             #{inspect(queried)} has no primary read action, so the guard for \
              `#{rel_label(rel)}` has nothing to query through.
 
              Add a read action, or declare `read_action` on `#{rel_label(rel)}`.
-             """)}
+             """}
 
-          AshBorrow.Query.unclean_read_action?(primary) ->
-            {:error,
-             channel_error(module, path_name, """
-             The primary read action of #{inspect(queried_name)} carries filters, \
-             preparations, or required arguments, which would hide physically live \
-             rows from the guard querying through `#{rel_label(rel)}`.
-
-             Declare an explicit read action suitable for existence checks:
-
-               #{rel_label(rel)} do
-                 read_action :name_of_unfiltered_read
-               end
-             """)}
-
-          true ->
-            :ok
+          action ->
+            {:ok, action}
         end
 
       name ->
-        action = Ash.Resource.Info.action(queried, name)
+        case Ash.Resource.Info.action(queried, name) do
+          %{type: :read} = action ->
+            {:ok, action}
 
-        if action && action.type == :read do
-          :ok
-        else
-          {:error,
-           channel_error(module, path_name, """
-           `#{rel_label(rel)}` declares `read_action :#{name}`, but \
-           #{inspect(queried_name)} has no read action with that name.
-           """)}
+          _ ->
+            {:error,
+             """
+             `#{rel_label(rel)}` declares `read_action :#{name}`, but the queried \
+             resource has no read action with that name.
+             """}
         end
     end
   end

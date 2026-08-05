@@ -50,8 +50,19 @@ end
 `borrows` compiles to a plain `belongs_to` and `borrowed_by` to a plain
 `has_many`, each carrying a marker — same options, same defaults, and every
 Ash feature (loading, forms, policies, migrations) works unchanged. Whether
-the reference is required (`allow_nil?`) is orthogonal to borrowing: a
-document may well require its template.
+the reference is required (`allow_nil?`) or exposed (`public?`) is orthogonal
+to borrowing: a document may well require its template.
+
+Since Ash defaults `public?` to `false`, shorthands mirroring `ash_req_opt`'s
+`belongs_to` variants are provided:
+
+| entity            | `allow_nil?`        | `public?` |
+| ----------------- | ------------------- | --------- |
+| `borrows`         | belongs_to defaults             ||
+| `req_borrows`     | `false`             | `true`    |
+| `req_prv_borrows` | `false`             | `false`   |
+| `opt_borrows`     | `true`              | `true`    |
+| `opt_prv_borrows` | `true`              | `false`   |
 
 ## The invariant
 

@@ -226,5 +226,36 @@ defmodule AshBorrow.GuardTest do
       assert [%{name: :read}] =
                Ash.Resource.Info.actions(MiddleLink) |> Enum.filter(&(&1.type == :read))
     end
+
+    test "a resource with no borrow edges gets no guard changes" do
+      defmodule Untouched do
+        @moduledoc false
+        use Ash.Resource,
+          domain: nil,
+          extensions: [AshBorrow.Borrower, AshBorrow.Borrowable]
+
+        attributes do
+          uuid_primary_key :id
+        end
+
+        actions do
+          defaults [:read, :destroy, create: :*, update: :*]
+        end
+      end
+
+      guards =
+        Untouched
+        |> Ash.Resource.Info.actions()
+        |> Enum.flat_map(fn action -> Map.get(action, :changes, []) end)
+        |> Enum.filter(fn
+          %Ash.Resource.Change{change: {module, _}} ->
+            module in [AshBorrow.Changes.EnsureTargetLive, AshBorrow.Changes.EnsureNotBorrowed]
+
+          _ ->
+            false
+        end)
+
+      assert guards == []
+    end
   end
 end

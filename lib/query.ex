@@ -4,11 +4,10 @@ defmodule AshBorrow.Query do
 
   @doc false
   # The read action a guard uses to query through `rel`: the relationship's
-  # explicitly declared `read_action` if any, otherwise the destination's
-  # primary read. `AshBorrow.Verifiers.BorrowedByConsistency` guarantees at
-  # compile time that the effective default (the primary read) carries no
-  # action-level filters/preparations — an explicitly declared `read_action`
-  # is trusted as a deliberate choice.
+  # `read_action` if set, otherwise the destination's primary read.
+  # `AshBorrow.Verifiers.BorrowedByConsistency` guarantees at compile time
+  # that whichever action this resolves to carries no action-level
+  # filters/preparations, so it cannot hide physically live rows.
   def guard_read_action(rel) do
     rel.read_action ||
       case Ash.Resource.Info.primary_action(rel.destination, :read) do
@@ -44,12 +43,13 @@ defmodule AshBorrow.Query do
     base =
       rel.destination
       |> Ash.Query.new()
+      |> Ash.Query.set_context(rel.context || %{})
       |> Ash.Query.set_context(%{ash_borrow_guard?: true})
 
     query =
       case guard_read_action(rel) do
         nil -> base
-        action_name -> Ash.Query.for_read(base, action_name)
+        action_name -> Ash.Query.for_read(base, action_name, rel.read_action_arguments || %{})
       end
 
     domain = rel.domain || Ash.Resource.Info.domain(rel.destination) || changeset.domain
