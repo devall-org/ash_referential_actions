@@ -1,11 +1,15 @@
 defmodule AshBorrow.Verifiers.BorrowableRequiresBorrows do
   @moduledoc false
-  # A plain `belongs_to` must not target an `AshBorrow.Borrowable` resource:
-  # references to borrowable resources are non-owning by definition and must
-  # be declared with `borrows`.
+  # A plain `belongs_to` to an `AshBorrow.Borrowable` resource is only allowed
+  # when it is containment — that is, when the borrowable declares the reverse
+  # `has_many`/`has_one` back to this resource. A borrowable may well own
+  # children of its own; those children go down with it and need no guard.
+  #
+  # Without that reverse declaration the relationship is a non-owning
+  # reference, which must be declared with `borrows` so the guards can see it.
   use Spark.Dsl.Verifier
 
-  alias Ash.Resource.Relationships.BelongsTo
+  alias Ash.Resource.Relationships.{BelongsTo, HasMany, HasOne}
   alias Spark.Dsl.Verifier
 
   @impl true
@@ -14,13 +18,14 @@ defmodule AshBorrow.Verifiers.BorrowableRequiresBorrows do
 
     dsl_state
     |> Ash.Resource.Info.relationships()
-    |> Enum.find(fn
+    |> Enum.filter(fn
       %BelongsTo{} = rel ->
         not AshBorrow.Info.borrows?(rel) and AshBorrow.Info.borrowable?(rel.destination)
 
       %{} ->
         false
     end)
+    |> Enum.find(&(not contained?(&1, module)))
     |> case do
       nil ->
         :ok
@@ -31,13 +36,35 @@ defmodule AshBorrow.Verifiers.BorrowableRequiresBorrows do
            module: module,
            path: [:relationships, rel.name],
            message: """
-           `belongs_to :#{rel.name}` targets #{inspect(rel.destination)}, which is borrowable.
+           `belongs_to :#{rel.name}` targets #{inspect(rel.destination)}, which is \
+           borrowable, but #{inspect(rel.destination)} declares no relationship back \
+           to #{inspect(module)}.
 
-           References to a borrowable resource are non-owning and must be declared with:
+           If this is a non-owning reference, declare it as a borrow so the guards \
+           can see it:
 
              borrows :#{rel.name}, #{inspect(rel.destination)}
+
+           If #{inspect(module)} is instead owned by #{inspect(rel.destination)}, \
+           declare the containment on #{inspect(rel.destination)} with a plain \
+           `has_many`/`has_one` back to #{inspect(module)}.
            """
          )}
     end
+  end
+
+  # Containment is declared by the owner: a plain (non-borrowed_by) reverse
+  # relationship on the destination, matching both key attributes.
+  defp contained?(belongs_to, module) do
+    belongs_to.destination
+    |> Ash.Resource.Info.relationships()
+    |> Enum.any?(fn
+      %kind{} = rel when kind in [HasMany, HasOne] ->
+        not AshBorrow.Info.borrowed_by?(rel) and rel.destination == module and
+          AshBorrow.Info.reverse_of?(rel, belongs_to)
+
+      %{} ->
+        false
+    end)
   end
 end

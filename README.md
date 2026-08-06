@@ -105,8 +105,11 @@ All cross-module checks run on the borrower side, so compile-time
 dependencies flow one way (borrower → borrowable):
 
 * `borrows` must target an `AshBorrow.Borrowable` resource.
-* A plain `belongs_to` targeting a borrowable resource is rejected — use
-  `borrows`.
+* A plain `belongs_to` targeting a borrowable resource is rejected unless it
+  is containment — that is, unless the borrowable declares the reverse
+  `has_many`/`has_one` back. A borrowable may own children of its own; those
+  go down with it and need no guard. Anything else is a non-owning reference
+  and must be declared with `borrows`.
 * The `borrows` reference must create a real foreign key with restrict
   semantics: `ignore?: true` is rejected, and `on_delete` must be omitted,
   `:restrict`, or `:nothing`.

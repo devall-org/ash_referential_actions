@@ -61,7 +61,91 @@ defmodule AshBorrow.VerifierTest do
           end
         end
 
-      assert error.message =~ "must be declared with"
+      assert error.message =~ "declares no relationship back"
+    end
+
+    test "a borrowable may own contained children" do
+      refute_dsl_errors do
+        defmodule OwningBorrowable do
+          @moduledoc false
+          use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
+
+          attributes do
+            uuid_primary_key(:id)
+          end
+
+          actions do
+            defaults([:read])
+          end
+
+          relationships do
+            # Plain has_many: containment, declared by the owner.
+            has_many(:line_items, AshBorrow.VerifierTest.BorrowableLineItem)
+          end
+        end
+
+        defmodule BorrowableLineItem do
+          @moduledoc false
+          use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrower]
+
+          attributes do
+            uuid_primary_key(:id)
+          end
+
+          actions do
+            defaults([:read])
+          end
+
+          relationships do
+            belongs_to(:owning_borrowable, AshBorrow.VerifierTest.OwningBorrowable)
+          end
+        end
+      end
+    end
+
+    test "a containment reverse with a mismatched key pair is still rejected" do
+      defmodule MismatchedOwner do
+        @moduledoc false
+        use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:alt_id, :uuid, public?: true)
+        end
+
+        actions do
+          defaults([:read])
+        end
+
+        relationships do
+          has_many :mismatched_children, AshBorrow.VerifierTest.MismatchedChild do
+            source_attribute(:alt_id)
+            destination_attribute(:mismatched_owner_id)
+          end
+        end
+      end
+
+      error =
+        assert_dsl_error %Spark.Error.DslError{} do
+          defmodule MismatchedChild do
+            @moduledoc false
+            use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrower]
+
+            attributes do
+              uuid_primary_key(:id)
+            end
+
+            actions do
+              defaults([:read])
+            end
+
+            relationships do
+              belongs_to(:mismatched_owner, AshBorrow.VerifierTest.MismatchedOwner)
+            end
+          end
+        end
+
+      assert error.message =~ "declares no relationship back"
     end
   end
 

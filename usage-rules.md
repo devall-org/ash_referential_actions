@@ -47,13 +47,18 @@ end
   Deleting or archiving the
   record must not touch the target, and vice versa.
 * Use `belongs_to` for containment: the parent owns the record and cascade
-  archival takes the record down with the parent.
-* The verifier enforces this split: `belongs_to` targeting a borrowable
-  resource is a compile error.
+  archival takes the record down with the parent. This holds even when the
+  parent is itself borrowable — a borrowable may own children.
+* The verifier enforces this split: a `belongs_to` targeting a borrowable
+  resource is a compile error unless that borrowable declares the reverse
+  `has_many`/`has_one` back, which is how containment is declared.
 
 ## Rules enforced at compile time
 
 * `borrows` destinations must use `AshBorrow.Borrowable`.
+* A plain `belongs_to` to a borrowable is allowed only as containment: the
+  borrowable must declare a plain (non-`borrowed_by`) `has_many`/`has_one`
+  back, matching both key attributes.
 * The ash_postgres reference for a `borrows` relationship must create a real
   foreign key with restrict semantics: never `ignore?: true`, and omit
   `on_delete` or use `:restrict`/`:nothing`. Never `:delete`/`:nilify`.

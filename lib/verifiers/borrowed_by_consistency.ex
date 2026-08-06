@@ -157,15 +157,8 @@ defmodule AshBorrow.Verifiers.BorrowedByConsistency do
     )
   end
 
-  # A reverse matches a borrows edge only when both sides of the key pair
-  # line up: the reverse queries borrower rows by `destination_attribute`
-  # (the borrows FK) starting from its own `source_attribute` (the borrowed
-  # key). Checking only one side would let a mis-wired reverse compile and
-  # feed the destroy guard a query that never finds real borrowers.
-  defp matching_pair?(reverse_rel, borrows_rel) do
-    reverse_rel.destination_attribute == borrows_rel.source_attribute and
-      reverse_rel.source_attribute == borrows_rel.destination_attribute
-  end
+  defp matching_pair?(reverse_rel, borrows_rel),
+    do: AshBorrow.Info.reverse_of?(reverse_rel, borrows_rel)
 
   defp verify_reverse_authenticity(module, destination, borrows_rels, reverse_rels) do
     reverse_rels

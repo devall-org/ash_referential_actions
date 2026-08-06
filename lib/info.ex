@@ -13,4 +13,16 @@ defmodule AshBorrow.Info do
   def borrowable?(resource) when is_atom(resource) do
     AshBorrow.Borrowable in (Spark.Dsl.Extension.get_persisted(resource, :extensions) || [])
   end
+
+  @doc """
+  Returns true if `reverse` (a `has_many`/`has_one`) is the reverse side of
+  `forward` (a `belongs_to`): both key attributes line up.
+
+  Checking only one attribute would accept a mis-wired pair whose query never
+  finds the rows it is meant to find.
+  """
+  def reverse_of?(reverse, forward) do
+    reverse.destination_attribute == forward.source_attribute and
+      reverse.source_attribute == forward.destination_attribute
+  end
 end
