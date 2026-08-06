@@ -5,7 +5,7 @@ defmodule AshBorrow.Test.Support.TestResources do
 
   defmodule Snapshot do
     @moduledoc false
-    use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
+    use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
     attributes do
       uuid_primary_key(:id)
@@ -16,13 +16,13 @@ defmodule AshBorrow.Test.Support.TestResources do
     end
 
     relationships do
-      borrowed_by(:docs, TestResources.Doc)
+      used_by(:docs, TestResources.Doc)
     end
   end
 
   defmodule Doc do
     @moduledoc false
-    use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrower]
+    use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
     attributes do
       uuid_primary_key(:id)
@@ -33,7 +33,7 @@ defmodule AshBorrow.Test.Support.TestResources do
     end
 
     relationships do
-      borrows(:snapshot, TestResources.Snapshot)
+      uses(:snapshot, TestResources.Snapshot)
     end
   end
 end

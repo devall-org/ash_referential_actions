@@ -5,7 +5,7 @@ defmodule AshBorrow.Query do
   @doc false
   # The read action a guard uses to query through `rel`: the relationship's
   # `read_action` if set, otherwise the destination's primary read.
-  # `AshBorrow.Verifiers.BorrowedByConsistency` guarantees at compile time
+  # `AshBorrow.Verifiers.UsedByConsistency` guarantees at compile time
   # that whichever action this resolves to carries no action-level
   # filters/preparations, so it cannot hide physically live rows.
   def guard_read_action(rel) do
@@ -26,7 +26,7 @@ defmodule AshBorrow.Query do
   end
 
   @doc false
-  # Existence check through `rel` (a borrows or borrowed_by relationship),
+  # Existence check through `rel` (a `uses` or `used_by` relationship),
   # filtered by `filter` (keyword statement).
   #
   # `authorize?: false` bypasses policies (a policy must not be able to hide
@@ -39,7 +39,15 @@ defmodule AshBorrow.Query do
   # that global preparations see it — custom global preparations that hide
   # rows from default reads should pass the query through unchanged when this
   # flag is set.
-  def exists?(rel, filter, changeset) do
+  def exists?(rel, filter, changeset), do: exists?(rel, filter, changeset, nil)
+
+  @doc false
+  # `lock` serializes the guard against the concurrent write it is trying to
+  # exclude, in whatever form the data layer names it (ash_postgres takes
+  # `:for_update` as an atom and everything else as a string). Silently
+  # ignored where the data layer does not support that lock (e.g. ETS), so
+  # the guard stays a plain application-level check there.
+  def exists?(rel, filter, changeset, lock) do
     base =
       rel.destination
       |> Ash.Query.new()
@@ -56,11 +64,50 @@ defmodule AshBorrow.Query do
 
     query
     |> Ash.Query.do_filter(filter)
+    |> lock(lock)
     |> Ash.exists?(
       domain: domain,
       authorize?: false,
       tenant: changeset.tenant
     )
+  end
+
+  @doc false
+  # Takes a `FOR UPDATE` lock on the record the changeset is acting on, so a
+  # concurrent write that checks this record (a user being created) must
+  # wait for this transaction to finish. No-op where the data layer has no
+  # lock support. The record may already be filtered out (e.g. archived), in
+  # which case there is nothing to serialize against.
+  def lock_record(changeset) do
+    resource = changeset.resource
+
+    if Ash.DataLayer.data_layer_can?(resource, {:lock, :for_update}) do
+      pkey = Ash.Resource.Info.primary_key(resource)
+      filter = Enum.map(pkey, &{&1, Map.fetch!(changeset.data, &1)})
+
+      resource
+      |> Ash.Query.new()
+      |> Ash.Query.set_context(%{ash_borrow_guard?: true})
+      |> Ash.Query.do_filter(filter)
+      |> Ash.Query.lock(:for_update)
+      |> Ash.read_one(
+        domain: changeset.domain,
+        authorize?: false,
+        tenant: changeset.tenant
+      )
+    end
+
+    :ok
+  end
+
+  defp lock(query, nil), do: query
+
+  defp lock(query, lock_type) do
+    if Ash.DataLayer.data_layer_can?(query.resource, {:lock, lock_type}) do
+      Ash.Query.lock(query, lock_type)
+    else
+      query
+    end
   end
 
   @doc false

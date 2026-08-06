@@ -1,10 +1,10 @@
 defmodule AshBorrow.Changes.EnsureTargetLive do
   @moduledoc """
   Runtime guard added to every create and update action of an
-  `AshBorrow.Borrower` resource: writing a `borrows` foreign key is rejected
+  resource that declares `uses`: writing a `uses` foreign key is rejected
   unless the target exists and is live.
 
-  Without this, a borrower could be pointed at an already-archived (or, on
+  Without this, a user could be pointed at an already-archived (or, on
   data layers without foreign keys, missing) target — a ghost reference the
   destroy-side guard can never prevent, since it only fires on the target.
 
@@ -19,8 +19,14 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
     non-transactional layers (e.g. ETS) the error is returned but the write
     is not undone — the same caveat as any after-action validation there.
 
-  The target is looked up via the borrows relationship's declared
-  `read_action` (or the borrowable's primary read — a verifier rejects a
+  The lookup takes a `FOR SHARE` lock on the target row where the data layer
+  supports one, so a concurrent archive of that target must wait: either it
+  commits first and this check sees the archived row, or this write commits
+  first and the archive's own guard sees this user. Without lock support
+  (e.g. ETS) the check stays a plain application-level read.
+
+  The target is looked up via the uses relationship's declared
+  `read_action` (or the used resource's primary read — a verifier rejects a
   filtered primary read as the default), so action-level read filters cannot
   silently hide a live target; archival's global filter still applies, so an
   archived target counts as not live.
@@ -34,7 +40,7 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
     |> Ash.Changeset.after_action(&check_result_keys/2)
   end
 
-  # Updates that provably cannot touch a borrows foreign key stay
+  # Updates that provably cannot touch a uses foreign key stay
   # atomic-compatible. `atomic/3` runs before later changes in the action, so
   # any other change (action-level or global) could still add a foreign key
   # atomic we cannot see yet — returning `{:ok, changeset}` there would skip
@@ -44,12 +50,12 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
   @impl true
   def atomic(changeset, _opts, _context) do
     cond do
-      touches_borrows_key?(changeset) ->
+      touches_uses_key?(changeset) ->
         {:not_atomic, "AshBorrow.Changes.EnsureTargetLive must query the borrowed target"}
 
       has_other_changes?(changeset) ->
         {:not_atomic,
-         "a later change could set a borrows key atomically, " <>
+         "a later change could set a uses key atomically, " <>
            "which AshBorrow.Changes.EnsureTargetLive must verify"}
 
       true ->
@@ -57,9 +63,9 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
     end
   end
 
-  defp touches_borrows_key?(changeset) do
+  defp touches_uses_key?(changeset) do
     changeset.resource
-    |> borrows_rels()
+    |> uses_rels()
     |> Enum.any?(fn rel ->
       Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) or
         Keyword.has_key?(changeset.atomics, rel.source_attribute)
@@ -83,15 +89,15 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
     end)
   end
 
-  defp borrows_rels(resource) do
+  defp uses_rels(resource) do
     resource
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshBorrow.Info.borrows?/1)
+    |> Enum.filter(&AshBorrow.Info.uses?/1)
   end
 
   defp check_changing_keys(changeset) do
     changeset.resource
-    |> borrows_rels()
+    |> uses_rels()
     |> Enum.reduce(changeset, fn rel, changeset ->
       if Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) do
         case verify_target(
@@ -110,7 +116,7 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
 
   defp check_result_keys(changeset, result) do
     changeset.resource
-    |> borrows_rels()
+    |> uses_rels()
     |> Enum.reduce_while({:ok, result}, fn rel, {:ok, result} ->
       value = Map.get(result, rel.source_attribute)
       original = original_value(changeset, rel.source_attribute)
@@ -134,12 +140,12 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
       is_nil(value) ->
         :ok
 
-      AshBorrow.Query.exists?(rel, [{rel.destination_attribute, value}], changeset) ->
+      AshBorrow.Query.exists?(rel, [{rel.destination_attribute, value}], changeset, "FOR SHARE") ->
         :ok
 
       true ->
         {:error,
-         "cannot borrow via :#{rel.name}: target #{inspect(rel.destination)} " <>
+         "cannot use :#{rel.name}: target #{inspect(rel.destination)} " <>
            "does not exist or is not live"}
     end
   end

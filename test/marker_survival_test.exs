@@ -3,18 +3,18 @@ defmodule AshBorrow.MarkerSurvivalTest do
 
   alias AshBorrow.Test.Support.TestResources
 
-  test "borrows compiles to a BelongsTo that keeps the :__borrows__ marker" do
+  test "uses compiles to a BelongsTo that keeps the :__uses__ marker" do
     rel = Ash.Resource.Info.relationship(TestResources.Doc, :snapshot)
 
     assert %Ash.Resource.Relationships.BelongsTo{} = rel
-    assert Map.get(rel, :__borrows__) == true
+    assert Map.get(rel, :__uses__) == true
     assert rel.destination == TestResources.Snapshot
   end
 
-  test "borrows passes belongs_to options through" do
+  test "uses passes belongs_to options through" do
     defmodule RequiredSnapshot do
       @moduledoc false
-      use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
+      use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
       attributes do
         uuid_primary_key :id
@@ -25,7 +25,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
       end
 
       relationships do
-        borrowed_by :required_borrow_docs, AshBorrow.MarkerSurvivalTest.RequiredBorrowDoc do
+        used_by :required_borrow_docs, AshBorrow.MarkerSurvivalTest.RequiredBorrowDoc do
           destination_attribute :snapshot_id
         end
       end
@@ -33,7 +33,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
 
     defmodule RequiredBorrowDoc do
       @moduledoc false
-      use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrower]
+      use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
       attributes do
         uuid_primary_key :id
@@ -44,7 +44,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
       end
 
       relationships do
-        borrows :snapshot, AshBorrow.MarkerSurvivalTest.RequiredSnapshot do
+        uses :snapshot, AshBorrow.MarkerSurvivalTest.RequiredSnapshot do
           allow_nil? false
           public? true
         end
@@ -53,7 +53,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
 
     rel = Ash.Resource.Info.relationship(RequiredBorrowDoc, :snapshot)
 
-    assert Map.get(rel, :__borrows__) == true
+    assert Map.get(rel, :__uses__) == true
     assert rel.allow_nil? == false
     assert rel.public? == true
   end
@@ -61,7 +61,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
   test "req/opt and pub/priv variants set allow_nil? and public?" do
     defmodule VariantSnapshot do
       @moduledoc false
-      use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
+      use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
       attributes do
         uuid_primary_key :id
@@ -73,7 +73,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
 
       relationships do
         for name <- [:req_docs, :req_priv_docs, :opt_docs, :opt_priv_docs] do
-          borrowed_by name, AshBorrow.MarkerSurvivalTest.VariantDoc do
+          used_by name, AshBorrow.MarkerSurvivalTest.VariantDoc do
             destination_attribute :"#{name}_snapshot_id"
           end
         end
@@ -82,7 +82,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
 
     defmodule VariantDoc do
       @moduledoc false
-      use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrower]
+      use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
       attributes do
         uuid_primary_key :id
@@ -93,10 +93,10 @@ defmodule AshBorrow.MarkerSurvivalTest do
       end
 
       relationships do
-        req_borrows :req_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
-        req_priv_borrows :req_priv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
-        opt_borrows :opt_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
-        opt_priv_borrows :opt_priv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
+        req_uses :req_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
+        req_priv_uses :req_priv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
+        opt_uses :opt_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
+        opt_priv_uses :opt_priv_docs_snapshot, AshBorrow.MarkerSurvivalTest.VariantSnapshot
       end
     end
 
@@ -110,7 +110,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
     for {name, {allow_nil?, public?}} <- expected do
       rel = Ash.Resource.Info.relationship(VariantDoc, name)
 
-      assert AshBorrow.Info.borrows?(rel)
+      assert AshBorrow.Info.uses?(rel)
       assert rel.allow_nil? == allow_nil?, "#{name} allow_nil?"
       assert rel.public? == public?, "#{name} public?"
       # public? drives attribute_public? unless set explicitly
@@ -118,11 +118,11 @@ defmodule AshBorrow.MarkerSurvivalTest do
     end
   end
 
-  test "borrowed_by compiles to a HasMany that keeps the :__borrowed_by__ marker" do
+  test "used_by compiles to a HasMany that keeps the :__used_by__ marker" do
     rel = Ash.Resource.Info.relationship(TestResources.Snapshot, :docs)
 
     assert %Ash.Resource.Relationships.HasMany{} = rel
-    assert Map.get(rel, :__borrowed_by__) == true
+    assert Map.get(rel, :__used_by__) == true
     assert rel.destination == TestResources.Doc
     assert rel.destination_attribute == :snapshot_id
   end
@@ -154,7 +154,7 @@ defmodule AshBorrow.MarkerSurvivalTest do
       end
     end
 
-    refute Ash.Resource.Info.relationship(PlainChild, :plain_parent) |> Map.get(:__borrows__)
-    refute Ash.Resource.Info.relationship(PlainParent, :children) |> Map.get(:__borrowed_by__)
+    refute Ash.Resource.Info.relationship(PlainChild, :plain_parent) |> Map.get(:__uses__)
+    refute Ash.Resource.Info.relationship(PlainParent, :children) |> Map.get(:__used_by__)
   end
 end

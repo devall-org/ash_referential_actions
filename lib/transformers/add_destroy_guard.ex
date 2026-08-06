@@ -1,9 +1,15 @@
-defmodule AshBorrow.Borrowable.AddGuard do
+defmodule AshBorrow.Transformers.AddDestroyGuard do
   @moduledoc false
-  # Prepends AshBorrow.Changes.EnsureNotBorrowed to every destroy action of a
-  # borrowable resource, so a borrowed record can neither be hard-deleted nor
+  # Prepends AshBorrow.Changes.EnsureNotUsed to every destroy action of a
+  # resource with the AshBorrow extension, so a used record can neither be hard-deleted nor
   # archived (archival rewrites destroys into soft updates, keeping the
-  # change) while live borrowers exist.
+  # change) while live users exist.
+  #
+  # Prepending puts the guard's `before_action` hook in first, and Ash runs
+  # before_action hooks last-registered-first, so the guard ends up running
+  # after the resource's own checks. That matters because Ash stops at the
+  # first error: an application's domain message wins over this library's
+  # generic wording when both would reject the same destroy.
   #
   # Ordering mirrors AshArchival's SetupArchival and additionally runs before
   # it, so the guard is in place before archival rewrites the destroy actions.
@@ -24,10 +30,10 @@ defmodule AshBorrow.Borrowable.AddGuard do
 
   @impl true
   def transform(dsl_state) do
-    # Nothing to enumerate without borrowed_by edges. A borrowable that is
-    # actually borrowed always has them (the borrower-side verifier requires
-    # a matching one), so skipping here only spares resources nobody borrows.
-    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.borrowed_by?/1) do
+    # Nothing to enumerate without used_by edges. A resource that is
+    # actually used always has them (the using-side verifier requires
+    # a matching one), so skipping here only spares resources nobody uses.
+    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.used_by?/1) do
       add_guard(dsl_state)
     else
       {:ok, dsl_state}
@@ -41,7 +47,7 @@ defmodule AshBorrow.Borrowable.AddGuard do
     |> Enum.reduce({:ok, dsl_state}, fn destroy_action, {:ok, dsl_state} ->
       with {:ok, guard} <-
              Transformer.build_entity(Ash.Resource.Dsl, [:actions, :destroy], :change,
-               change: {AshBorrow.Changes.EnsureNotBorrowed, []}
+               change: {AshBorrow.Changes.EnsureNotUsed, []}
              ) do
         new_action = %{destroy_action | changes: [guard | destroy_action.changes]}
 

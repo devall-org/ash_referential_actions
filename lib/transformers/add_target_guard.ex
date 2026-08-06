@@ -1,7 +1,7 @@
-defmodule AshBorrow.Borrower.AddTargetGuard do
+defmodule AshBorrow.Transformers.AddTargetGuard do
   @moduledoc false
   # Prepends AshBorrow.Changes.EnsureTargetLive to every create and update
-  # action of a borrower resource, so a borrows foreign key can never be
+  # action of a user resource, so a uses foreign key can never be
   # pointed at an archived or missing target.
   use Spark.Dsl.Transformer
 
@@ -18,10 +18,10 @@ defmodule AshBorrow.Borrower.AddTargetGuard do
 
   @impl true
   def transform(dsl_state) do
-    # Nothing to guard without borrows edges. Skipping keeps the extension
-    # free to sit on a base resource module: resources that borrow nothing
+    # Nothing to guard without uses edges. Skipping keeps the extension
+    # free to sit on a base resource module: resources that use nothing
     # are untouched, and in particular stay atomic-capable for bulk updates.
-    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.borrows?/1) do
+    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.uses?/1) do
       add_guard(dsl_state)
     else
       {:ok, dsl_state}

@@ -8,7 +8,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrowable, AshArchival.Resource]
+      extensions: [AshBorrow, AshArchival.Resource]
 
     ets do
       private? true
@@ -23,7 +23,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrowed_by :docs, GuardResources.Doc
+      used_by :docs, GuardResources.Doc
     end
   end
 
@@ -32,7 +32,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrower, AshArchival.Resource]
+      extensions: [AshBorrow, AshArchival.Resource]
 
     ets do
       private? true
@@ -53,7 +53,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrows :snapshot, GuardResources.Snapshot do
+      uses :snapshot, GuardResources.Snapshot do
         attribute_writable? true
         attribute_public? true
       end
@@ -83,7 +83,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrowable, AshArchival.Resource]
+      extensions: [AshBorrow, AshArchival.Resource]
 
     ets do
       private? true
@@ -103,7 +103,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrowed_by :prep_docs, GuardResources.PrepDoc
+      used_by :prep_docs, GuardResources.PrepDoc
     end
   end
 
@@ -114,7 +114,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrower, AshArchival.Resource]
+      extensions: [AshBorrow, AshArchival.Resource]
 
     ets do
       private? true
@@ -134,7 +134,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrows :prep_snapshot, GuardResources.PrepSnapshot do
+      uses :prep_snapshot, GuardResources.PrepSnapshot do
         attribute_writable? true
         attribute_public? true
       end
@@ -148,7 +148,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrowable]
+      extensions: [AshBorrow]
 
     ets do
       private? true
@@ -163,8 +163,12 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrowed_by :na_docs, GuardResources.NaDoc
+      used_by :na_docs, GuardResources.NaDoc
     end
+
+    # Optional override for the guard's rejection message.
+    def used_message(:na_docs), do: "NaSnapshot is still in use"
+    def used_message(_other), do: nil
   end
 
   defmodule NaDoc do
@@ -172,7 +176,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrower]
+      extensions: [AshBorrow]
 
     ets do
       private? true
@@ -187,7 +191,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrows :na_snapshot, GuardResources.NaSnapshot do
+      uses :na_snapshot, GuardResources.NaSnapshot do
         attribute_writable? true
         attribute_public? true
       end
@@ -199,7 +203,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrowable, AshArchival.Resource]
+      extensions: [AshBorrow, AshArchival.Resource]
 
     ets do
       private? true
@@ -216,7 +220,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     relationships do
       # FilteredDoc's primary read is filtered, so the destroy guard must be
       # pointed at an explicit unfiltered read action.
-      borrowed_by :filtered_docs, GuardResources.FilteredDoc do
+      used_by :filtered_docs, GuardResources.FilteredDoc do
         read_action :guard_read
       end
     end
@@ -229,7 +233,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow.Borrower, AshArchival.Resource]
+      extensions: [AshBorrow, AshArchival.Resource]
 
     ets do
       private? true
@@ -252,7 +256,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     end
 
     relationships do
-      borrows :filtered_snapshot, GuardResources.FilteredSnapshot do
+      uses :filtered_snapshot, GuardResources.FilteredSnapshot do
         attribute_writable? true
         attribute_public? true
       end

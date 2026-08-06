@@ -1,16 +1,16 @@
 spark_locals_without_parens = [
-  borrowed_by: 2,
-  borrowed_by: 3,
-  borrows: 2,
-  borrows: 3,
-  opt_borrows: 2,
-  opt_borrows: 3,
-  opt_priv_borrows: 2,
-  opt_priv_borrows: 3,
-  req_borrows: 2,
-  req_borrows: 3,
-  req_priv_borrows: 2,
-  req_priv_borrows: 3
+  opt_priv_uses: 2,
+  opt_priv_uses: 3,
+  opt_uses: 2,
+  opt_uses: 3,
+  req_priv_uses: 2,
+  req_priv_uses: 3,
+  req_uses: 2,
+  req_uses: 3,
+  used_by: 2,
+  used_by: 3,
+  uses: 2,
+  uses: 3
 ]
 
 [

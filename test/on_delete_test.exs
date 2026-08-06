@@ -12,7 +12,7 @@ defmodule AshBorrow.OnDeleteTest do
 
   defmodule PgSnapshot do
     @moduledoc false
-    use Ash.Resource, domain: nil, extensions: [AshBorrow.Borrowable]
+    use Ash.Resource, domain: nil, extensions: [AshBorrow]
 
     attributes do
       uuid_primary_key :id
@@ -23,21 +23,21 @@ defmodule AshBorrow.OnDeleteTest do
     end
 
     relationships do
-      borrowed_by :nilify_docs, AshBorrow.OnDeleteTest.NilifyDoc do
+      used_by :nilify_docs, AshBorrow.OnDeleteTest.NilifyDoc do
         destination_attribute :pg_snapshot_id
       end
 
-      borrowed_by :restrict_docs, AshBorrow.OnDeleteTest.RestrictDoc do
+      used_by :restrict_docs, AshBorrow.OnDeleteTest.RestrictDoc do
         destination_attribute :pg_snapshot_id
       end
 
-      borrowed_by :ignore_docs, AshBorrow.OnDeleteTest.IgnoreDoc do
+      used_by :ignore_docs, AshBorrow.OnDeleteTest.IgnoreDoc do
         destination_attribute :pg_snapshot_id
       end
     end
   end
 
-  test "a borrows reference with on_delete: :nilify is rejected" do
+  test "a uses reference with on_delete: :nilify is rejected" do
     error =
       assert_dsl_error %Spark.Error.DslError{} do
         defmodule NilifyDoc do
@@ -45,7 +45,7 @@ defmodule AshBorrow.OnDeleteTest do
           use Ash.Resource,
             domain: nil,
             data_layer: AshPostgres.DataLayer,
-            extensions: [AshBorrow.Borrower]
+            extensions: [AshBorrow]
 
           postgres do
             table "nilify_doc"
@@ -65,7 +65,7 @@ defmodule AshBorrow.OnDeleteTest do
           end
 
           relationships do
-            borrows :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
+            uses :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
           end
         end
       end
@@ -73,7 +73,7 @@ defmodule AshBorrow.OnDeleteTest do
     assert error.message =~ "restrict semantics"
   end
 
-  test "a borrows reference with ignore?: true is rejected" do
+  test "a uses reference with ignore?: true is rejected" do
     error =
       assert_dsl_error %Spark.Error.DslError{} do
         defmodule IgnoreDoc do
@@ -81,7 +81,7 @@ defmodule AshBorrow.OnDeleteTest do
           use Ash.Resource,
             domain: nil,
             data_layer: AshPostgres.DataLayer,
-            extensions: [AshBorrow.Borrower]
+            extensions: [AshBorrow]
 
           postgres do
             table "ignore_doc"
@@ -101,7 +101,7 @@ defmodule AshBorrow.OnDeleteTest do
           end
 
           relationships do
-            borrows :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
+            uses :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
           end
         end
       end
@@ -109,14 +109,14 @@ defmodule AshBorrow.OnDeleteTest do
     assert error.message =~ "removes the foreign key constraint"
   end
 
-  test "a borrows reference keeping restrict semantics compiles" do
+  test "a uses reference keeping restrict semantics compiles" do
     refute_dsl_errors do
       defmodule RestrictDoc do
         @moduledoc false
         use Ash.Resource,
           domain: nil,
           data_layer: AshPostgres.DataLayer,
-          extensions: [AshBorrow.Borrower]
+          extensions: [AshBorrow]
 
         postgres do
           table "restrict_doc"
@@ -136,12 +136,12 @@ defmodule AshBorrow.OnDeleteTest do
         end
 
         relationships do
-          borrows :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
+          uses :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
         end
       end
     end
 
     rel = Ash.Resource.Info.relationship(AshBorrow.OnDeleteTest.RestrictDoc, :pg_snapshot)
-    assert AshBorrow.Info.borrows?(rel)
+    assert AshBorrow.Info.uses?(rel)
   end
 end

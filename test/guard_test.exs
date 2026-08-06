@@ -20,7 +20,9 @@ defmodule AshBorrow.GuardTest do
       _doc = create!(Doc, %{snapshot_id: snapshot.id})
 
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
-      assert Exception.message(error) =~ "still borrowed via :docs"
+
+      assert Exception.message(error) =~
+               "still used by AshBorrow.Test.Support.GuardResources.Doc via :docs"
     end
 
     test "archiving succeeds once every borrower is archived" do
@@ -46,7 +48,9 @@ defmodule AshBorrow.GuardTest do
       _borrower = create!(NaDoc, %{na_snapshot_id: target.id})
 
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(target) end
-      assert Exception.message(error) =~ "still borrowed via :na_docs"
+
+      assert Exception.message(error) =~
+               "NaSnapshot is still in use"
     end
 
     test "hard delete succeeds once the borrower is gone" do
@@ -67,7 +71,9 @@ defmodule AshBorrow.GuardTest do
       assert [] = Ash.read!(FilteredDoc)
 
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
-      assert Exception.message(error) =~ "still borrowed via :filtered_docs"
+
+      assert Exception.message(error) =~
+               "still used by AshBorrow.Test.Support.GuardResources.FilteredDoc via :filtered_docs"
     end
   end
 
@@ -195,7 +201,9 @@ defmodule AshBorrow.GuardTest do
       assert [] = Ash.read!(PrepDoc)
 
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
-      assert Exception.message(error) =~ "still borrowed via :prep_docs"
+
+      assert Exception.message(error) =~
+               "still used by AshBorrow.Test.Support.GuardResources.PrepDoc via :prep_docs"
     end
 
     test "a live target hidden from default reads can still be borrowed" do
@@ -212,7 +220,7 @@ defmodule AshBorrow.GuardTest do
         @moduledoc false
         use Ash.Resource,
           domain: nil,
-          extensions: [AshBorrow.Borrower, AshBorrow.Borrowable]
+          extensions: [AshBorrow, AshBorrow]
 
         attributes do
           uuid_primary_key :id
@@ -232,7 +240,7 @@ defmodule AshBorrow.GuardTest do
         @moduledoc false
         use Ash.Resource,
           domain: nil,
-          extensions: [AshBorrow.Borrower, AshBorrow.Borrowable]
+          extensions: [AshBorrow, AshBorrow]
 
         attributes do
           uuid_primary_key :id
@@ -249,7 +257,7 @@ defmodule AshBorrow.GuardTest do
         |> Enum.flat_map(fn action -> Map.get(action, :changes, []) end)
         |> Enum.filter(fn
           %Ash.Resource.Change{change: {module, _}} ->
-            module in [AshBorrow.Changes.EnsureTargetLive, AshBorrow.Changes.EnsureNotBorrowed]
+            module in [AshBorrow.Changes.EnsureTargetLive, AshBorrow.Changes.EnsureNotUsed]
 
           _ ->
             false
