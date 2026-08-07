@@ -1,11 +1,11 @@
-defmodule AshBorrow.Test.Support.TestResources do
+defmodule AshOwnership.Test.Support.TestResources do
   @moduledoc false
 
-  alias AshBorrow.Test.Support.TestResources
+  alias AshOwnership.Test.Support.TestResources
 
   defmodule Snapshot do
     @moduledoc false
-    use Ash.Resource, domain: nil, extensions: [AshBorrow]
+    use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
     attributes do
       uuid_primary_key(:id)
@@ -22,7 +22,7 @@ defmodule AshBorrow.Test.Support.TestResources do
 
   defmodule Doc do
     @moduledoc false
-    use Ash.Resource, domain: nil, extensions: [AshBorrow]
+    use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
     attributes do
       uuid_primary_key(:id)

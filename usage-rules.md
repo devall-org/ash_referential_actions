@@ -1,8 +1,8 @@
-# Rules for working with AshBorrow
+# Rules for working with AshOwnership
 
 ## Purpose
 
-AshBorrow distinguishes non-owning references from containment. A `uses`
+AshOwnership distinguishes non-owning references from containment. A `uses`
 relationship is a `belongs_to` that does not own its target: the target is
 not the record's parent, may be shared by many users, and can neither be
 hard-deleted nor archived while live users exist.
@@ -12,7 +12,7 @@ hard-deleted nor archived while live users exist.
 ```elixir
 # The using side
 defmodule Document do
-  use Ash.Resource, extensions: [AshBorrow]
+  use Ash.Resource, extensions: [AshOwnership]
 
   relationships do
     uses :template, Template
@@ -21,7 +21,7 @@ end
 
 # The used side
 defmodule Template do
-  use Ash.Resource, extensions: [AshBorrow]
+  use Ash.Resource, extensions: [AshOwnership]
 
   relationships do
     used_by :documents, Document
@@ -37,7 +37,7 @@ end
   mirroring `ash_req_opt`'s `belongs_to` variants.
 * `used_by` compiles to `has_many` with a `:__used_by__` marker.
   It supports no `filter` — the archive guard must see every user.
-* `AshBorrow.Info.uses?/1`, `used_by?/1`, and `enabled?/1` expose
+* `AshOwnership.Info.uses?/1`, `used_by?/1`, and `enabled?/1` expose
   the markers.
 
 ## When to use `uses` vs `belongs_to`
@@ -55,7 +55,7 @@ end
 
 ## Rules enforced at compile time
 
-* `uses` destinations must use `AshBorrow`.
+* `uses` destinations must use `AshOwnership`.
 * A plain `belongs_to` to a used resource is allowed only as containment: the
   used resource must declare a plain (non-`used_by`) `has_many`/`has_one`
   back, matching both key attributes.
@@ -72,9 +72,9 @@ end
 
 Two changes are injected automatically:
 
-* `AshBorrow.Changes.EnsureNotUsed` on every destroy action of a
+* `AshOwnership.Changes.EnsureNotUsed` on every destroy action of a
   used resource: rejects the destroy while live users exist.
-* `AshBorrow.Changes.EnsureTargetLive` on every create and update action of
+* `AshOwnership.Changes.EnsureTargetLive` on every create and update action of
   a user: rejects writing a uses foreign key that points at an
   archived or missing target. It checks both in `before_action` (direct
   attribute input) and in `after_action` on the result record, so
@@ -102,7 +102,7 @@ Notes:
   gone. Archive users first, then the used resource.
 * Custom **global preparations** do apply to guard queries. If yours
   filters rows out of default reads, pass the query through unchanged when
-  `query.context[:ash_borrow_guard?]` is set — otherwise it will hide live
+  `query.context[:ash_ownership_guard?]` is set — otherwise it will hide live
   rows from the guards.
 * Inside one transaction, users archived earlier are already invisible —
   an ancestor cascade passes deterministically if it orders users before
@@ -133,4 +133,4 @@ library's compile-time checks enforcing.
 * A `used_by` pointing at a module with no `uses` at all is not
   detected (cross-module checks run when the user compiles).
 * Enforcement of "must use `uses`" only runs on resources that have the
-  `AshBorrow` extension — add it to your base resource module.
+  `AshOwnership` extension — add it to your base resource module.

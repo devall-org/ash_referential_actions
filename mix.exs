@@ -1,9 +1,9 @@
-defmodule AshBorrow.MixProject do
+defmodule AshOwnership.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :ash_borrow,
+      app: :ash_ownership,
       version: "0.1.0",
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -13,8 +13,8 @@ defmodule AshBorrow.MixProject do
       description:
         "Borrow semantics for Ash: non-owning `borrows` references that can never dangle.",
       package: package(),
-      source_url: "https://github.com/devall-org/ash_borrow",
-      homepage_url: "https://github.com/devall-org/ash_borrow",
+      source_url: "https://github.com/devall-org/ash_ownership",
+      homepage_url: "https://github.com/devall-org/ash_ownership",
       docs: [
         main: "readme",
         extras: ["README.md"]
@@ -46,10 +46,10 @@ defmodule AshBorrow.MixProject do
 
   defp package do
     [
-      name: "ash_borrow",
+      name: "ash_ownership",
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/devall-org/ash_borrow"
+        "GitHub" => "https://github.com/devall-org/ash_ownership"
       }
     ]
   end

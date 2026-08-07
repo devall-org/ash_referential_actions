@@ -1,11 +1,11 @@
-defmodule AshBorrow.Query do
+defmodule AshOwnership.Query do
   @moduledoc false
   # Shared query plumbing for the runtime guards.
 
   @doc false
   # The read action a guard uses to query through `rel`: the relationship's
   # `read_action` if set, otherwise the destination's primary read.
-  # `AshBorrow.Verifiers.UsedByConsistency` guarantees at compile time
+  # `AshOwnership.Verifiers.UsedByConsistency` guarantees at compile time
   # that whichever action this resolves to carries no action-level
   # filters/preparations, so it cannot hide physically live rows.
   def guard_read_action(rel) do
@@ -35,7 +35,7 @@ defmodule AshBorrow.Query do
   # notably archival's `is_nil(archived_at)` filter, which is exactly what
   # makes archived rows count as gone.
   #
-  # Guard queries carry `context[:ash_borrow_guard?]`, set BEFORE for_read so
+  # Guard queries carry `context[:ash_ownership_guard?]`, set BEFORE for_read so
   # that global preparations see it — custom global preparations that hide
   # rows from default reads should pass the query through unchanged when this
   # flag is set.
@@ -52,7 +52,7 @@ defmodule AshBorrow.Query do
       rel.destination
       |> Ash.Query.new()
       |> Ash.Query.set_context(rel.context || %{})
-      |> Ash.Query.set_context(%{ash_borrow_guard?: true})
+      |> Ash.Query.set_context(%{ash_ownership_guard?: true})
 
     query =
       case guard_read_action(rel) do
@@ -87,7 +87,7 @@ defmodule AshBorrow.Query do
 
       resource
       |> Ash.Query.new()
-      |> Ash.Query.set_context(%{ash_borrow_guard?: true})
+      |> Ash.Query.set_context(%{ash_ownership_guard?: true})
       |> Ash.Query.do_filter(filter)
       |> Ash.Query.lock(:for_update)
       |> Ash.read_one(

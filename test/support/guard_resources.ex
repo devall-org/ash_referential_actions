@@ -1,14 +1,14 @@
-defmodule AshBorrow.Test.Support.GuardResources do
+defmodule AshOwnership.Test.Support.GuardResources do
   @moduledoc false
 
-  alias AshBorrow.Test.Support.GuardResources
+  alias AshOwnership.Test.Support.GuardResources
 
   defmodule Snapshot do
     @moduledoc false
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow, AshArchival.Resource]
+      extensions: [AshOwnership, AshArchival.Resource]
 
     ets do
       private? true
@@ -32,7 +32,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow, AshArchival.Resource]
+      extensions: [AshOwnership, AshArchival.Resource]
 
     ets do
       private? true
@@ -68,7 +68,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
 
     @impl true
     def prepare(query, _opts, _context) do
-      if query.context[:ash_borrow_guard?] do
+      if query.context[:ash_ownership_guard?] do
         query
       else
         Ash.Query.do_filter(query, active: true)
@@ -83,7 +83,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow, AshArchival.Resource]
+      extensions: [AshOwnership, AshArchival.Resource]
 
     ets do
       private? true
@@ -114,7 +114,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow, AshArchival.Resource]
+      extensions: [AshOwnership, AshArchival.Resource]
 
     ets do
       private? true
@@ -148,7 +148,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow]
+      extensions: [AshOwnership]
 
     ets do
       private? true
@@ -176,7 +176,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow]
+      extensions: [AshOwnership]
 
     ets do
       private? true
@@ -203,7 +203,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow, AshArchival.Resource]
+      extensions: [AshOwnership, AshArchival.Resource]
 
     ets do
       private? true
@@ -233,7 +233,7 @@ defmodule AshBorrow.Test.Support.GuardResources do
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
-      extensions: [AshBorrow, AshArchival.Resource]
+      extensions: [AshOwnership, AshArchival.Resource]
 
     ets do
       private? true

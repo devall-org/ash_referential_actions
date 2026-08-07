@@ -1,4 +1,4 @@
-defmodule AshBorrow.Changes.EnsureNotUsed do
+defmodule AshOwnership.Changes.EnsureNotUsed do
   @moduledoc """
   Runtime guard added to every destroy action of a resource that declares
   `used_by`: the destroy (hard delete, or archive when the resource is
@@ -16,7 +16,7 @@ defmodule AshBorrow.Changes.EnsureNotUsed do
 
   Before counting, the record being destroyed is locked `FOR UPDATE` where the
   data layer supports it, pairing with the `FOR SHARE` lock
-  `AshBorrow.Changes.EnsureTargetLive` takes on the same row. That closes the
+  `AshOwnership.Changes.EnsureTargetLive` takes on the same row. That closes the
   window where a use is created concurrently with a destroy. On data layers
   without lock support (e.g. ETS) both stay plain application-level checks and
   the race remains.
@@ -30,7 +30,7 @@ defmodule AshBorrow.Changes.EnsureNotUsed do
 
   @impl true
   def atomic(_changeset, _opts, _context) do
-    {:not_atomic, "AshBorrow.Changes.EnsureNotUsed must query users"}
+    {:not_atomic, "AshOwnership.Changes.EnsureNotUsed must query users"}
   end
 
   # Ash stops at the first error, and this guard usually runs before a
@@ -55,16 +55,16 @@ defmodule AshBorrow.Changes.EnsureNotUsed do
     # FOR SHARE lock on this row before inserting, so after this returns
     # either they are committed and visible below, or they must wait for
     # this transaction and will then see the destroy.
-    AshBorrow.Query.lock_record(changeset)
+    AshOwnership.Query.lock_record(changeset)
 
     changeset.resource
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshBorrow.Info.used_by?/1)
+    |> Enum.filter(&AshOwnership.Info.used_by?/1)
     |> Enum.reduce(changeset, fn rel, changeset ->
-      source_value = AshBorrow.Query.data_attribute!(changeset, rel.source_attribute)
+      source_value = AshOwnership.Query.data_attribute!(changeset, rel.source_attribute)
 
       used? =
-        AshBorrow.Query.exists?(rel, [{rel.destination_attribute, source_value}], changeset)
+        AshOwnership.Query.exists?(rel, [{rel.destination_attribute, source_value}], changeset)
 
       if used? do
         Ash.Changeset.add_error(changeset, used_message(changeset.resource, rel))

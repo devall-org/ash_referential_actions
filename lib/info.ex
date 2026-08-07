@@ -1,17 +1,20 @@
-defmodule AshBorrow.Info do
+defmodule AshOwnership.Info do
   @moduledoc """
-  Introspection helpers for AshBorrow.
+  Introspection helpers for AshOwnership.
   """
 
   @doc "Returns true if the relationship was declared with `uses`."
   def uses?(relationship), do: Map.get(relationship, :__uses__, false) == true
 
+  @doc "Returns true if the relationship was declared with `ancestor`."
+  def ancestor?(relationship), do: Map.get(relationship, :__ancestor__, false) == true
+
   @doc "Returns true if the relationship was declared with `used_by`."
   def used_by?(relationship), do: Map.get(relationship, :__used_by__, false) == true
 
-  @doc "Returns true if the resource module has the `AshBorrow` extension."
+  @doc "Returns true if the resource module has the `AshOwnership` extension."
   def enabled?(resource) when is_atom(resource) do
-    AshBorrow in (Spark.Dsl.Extension.get_persisted(resource, :extensions) || [])
+    AshOwnership in (Spark.Dsl.Extension.get_persisted(resource, :extensions) || [])
   end
 
   @doc """

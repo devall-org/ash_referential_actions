@@ -1,6 +1,6 @@
-defmodule AshBorrow.Verifiers.RequiresUses do
+defmodule AshOwnership.Verifiers.RequiresUses do
   @moduledoc false
-  # A plain `belongs_to` to a resource with the AshBorrow extension is only allowed
+  # A plain `belongs_to` to a resource with the AshOwnership extension is only allowed
   # when it is containment — that is, when the used resource declares the reverse
   # `has_many`/`has_one` back to this resource. A used resource may well own
   # children of its own; those children go down with it and need no guard.
@@ -20,7 +20,8 @@ defmodule AshBorrow.Verifiers.RequiresUses do
     |> Ash.Resource.Info.relationships()
     |> Enum.filter(fn
       %BelongsTo{} = rel ->
-        not AshBorrow.Info.uses?(rel) and AshBorrow.Info.enabled?(rel.destination)
+        not AshOwnership.Info.uses?(rel) and not AshOwnership.Info.ancestor?(rel) and
+          AshOwnership.Info.enabled?(rel.destination)
 
       %{} ->
         false
@@ -37,7 +38,7 @@ defmodule AshBorrow.Verifiers.RequiresUses do
            path: [:relationships, rel.name],
            message: """
            `belongs_to :#{rel.name}` targets #{inspect(rel.destination)}, which has the \
-           AshBorrow extension, but #{inspect(rel.destination)} declares no relationship \
+           AshOwnership extension, but #{inspect(rel.destination)} declares no relationship \
            back to #{inspect(module)}.
 
            If this is a non-owning reference, declare it with `uses` so the guards \
@@ -48,6 +49,11 @@ defmodule AshBorrow.Verifiers.RequiresUses do
            If #{inspect(module)} is instead owned by #{inspect(rel.destination)}, \
            declare the containment on #{inspect(rel.destination)} with a plain \
            `has_many`/`has_one` back to #{inspect(module)}.
+
+           If this only carries an ancestor's id and the real parent is another \
+           relationship, declare it with `ancestor`:
+
+             ancestor :#{rel.name}, #{inspect(rel.destination)}
            """
          )}
     end
@@ -60,8 +66,8 @@ defmodule AshBorrow.Verifiers.RequiresUses do
     |> Ash.Resource.Info.relationships()
     |> Enum.any?(fn
       %kind{} = rel when kind in [HasMany, HasOne] ->
-        not AshBorrow.Info.used_by?(rel) and rel.destination == module and
-          AshBorrow.Info.reverse_of?(rel, belongs_to)
+        not AshOwnership.Info.used_by?(rel) and rel.destination == module and
+          AshOwnership.Info.reverse_of?(rel, belongs_to)
 
       %{} ->
         false

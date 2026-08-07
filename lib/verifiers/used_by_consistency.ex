@@ -1,4 +1,4 @@
-defmodule AshBorrow.Verifiers.UsedByConsistency do
+defmodule AshOwnership.Verifiers.UsedByConsistency do
   @moduledoc false
   # Cross-checks between this resource's `uses` edges and the reverse
   # declarations on their destinations.
@@ -36,8 +36,8 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
     uses_rels =
       dsl_state
       |> Ash.Resource.Info.relationships()
-      |> Enum.filter(&AshBorrow.Info.uses?/1)
-      |> Enum.filter(&AshBorrow.Info.enabled?(&1.destination))
+      |> Enum.filter(&AshOwnership.Info.uses?/1)
+      |> Enum.filter(&AshOwnership.Info.enabled?(&1.destination))
 
     uses_rels
     |> Enum.group_by(& &1.destination)
@@ -54,7 +54,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
 
     reverse_rels =
       Enum.filter(destination_rels, fn rel ->
-        AshBorrow.Info.used_by?(rel) and rel.destination == module
+        AshOwnership.Info.used_by?(rel) and rel.destination == module
       end)
 
     with :ok <- verify_reverse_authenticity(module, destination, uses_rels, reverse_rels),
@@ -105,7 +105,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
 
     clean? =
       Enum.any?(resolved, fn
-        {_rel, {:ok, action}} -> not AshBorrow.Query.unclean_read_action?(action)
+        {_rel, {:ok, action}} -> not AshOwnership.Query.unclean_read_action?(action)
         {_rel, {:error, _}} -> false
       end)
 
@@ -140,7 +140,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
   defp verify_channel(module, rel, queried, queried_name, path_name) do
     case resolve_channel_action(rel, queried, queried_name) do
       {:ok, action} ->
-        if AshBorrow.Query.unclean_read_action?(action) do
+        if AshOwnership.Query.unclean_read_action?(action) do
           {:error,
            channel_error(module, path_name, """
            The read action `:#{action.name}` of #{inspect(queried_name)}, which the \
@@ -199,7 +199,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
   end
 
   defp rel_label(rel) do
-    kind = if AshBorrow.Info.uses?(rel), do: "borrows", else: "used_by"
+    kind = if AshOwnership.Info.uses?(rel), do: "borrows", else: "used_by"
     "#{kind} :#{rel.name}"
   end
 
@@ -212,7 +212,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
   end
 
   defp matching_pair?(reverse_rel, uses_rel),
-    do: AshBorrow.Info.reverse_of?(reverse_rel, uses_rel)
+    do: AshOwnership.Info.reverse_of?(reverse_rel, uses_rel)
 
   defp verify_reverse_authenticity(module, destination, uses_rels, reverse_rels) do
     reverse_rels
@@ -253,7 +253,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
            module: module,
            path: [:relationships, uses_rel.name],
            message: """
-           #{inspect(destination)} has the AshBorrow extension, but declares no `used_by` matching \
+           #{inspect(destination)} has the AshOwnership extension, but declares no `used_by` matching \
            `uses :#{uses_rel.name}`.
 
            The destroy guard on #{inspect(destination)} must be able to enumerate every \
@@ -280,7 +280,7 @@ defmodule AshBorrow.Verifiers.UsedByConsistency do
     destination_rels
     |> Enum.find(fn
       %HasMany{} = rel ->
-        not AshBorrow.Info.used_by?(rel) and rel.destination == module and
+        not AshOwnership.Info.used_by?(rel) and rel.destination == module and
           Enum.any?(unguarded, &matching_pair?(rel, &1))
 
       %{} ->

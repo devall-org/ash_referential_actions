@@ -1,22 +1,31 @@
-defmodule AshBorrow do
+defmodule AshOwnership do
   @moduledoc """
-  Non-owning relationships for Ash: `uses` references that can never dangle.
+  Makes ownership explicit: which `belongs_to` owns a record, and which only
+  points at something else.
 
-  A `belongs_to` relationship conflates two meanings:
+  A `belongs_to` relationship conflates three meanings:
 
   * **Containment** — the record is owned by its parent and must go down with
-    it.
+    it. This is the only one Ash names, and every record has exactly one owner
+    (a join row has one per endpoint).
   * **Non-owning use** — the record merely *uses* the target; the target must
-    not vanish while the reference is alive.
+    not vanish while the reference is alive. Declared with `uses`.
+  * **Ancestor key** — a denormalized id of some ancestor, kept for tenant
+    filtering, policies and indexes. The real parent is another relationship.
+    Declared with `ancestor`.
 
-  This extension gives the second meaning its own vocabulary, modelled on
+  Leaving all three as plain `belongs_to` makes an owner indistinguishable
+  from a pointer, so nothing can tell what a teardown should reach. Naming the
+  two non-owning kinds leaves `belongs_to` meaning ownership and nothing else.
+
+  `uses` is modelled on
   Rust's borrow checker: a use is a borrow of the target, and the target
   cannot be dropped while any borrow is alive.
 
   ## Vocabulary
 
       defmodule MyApp.Document do
-        use Ash.Resource, extensions: [AshBorrow]
+        use Ash.Resource, extensions: [AshOwnership]
 
         relationships do
           uses :template, MyApp.Template
@@ -24,15 +33,26 @@ defmodule AshBorrow do
       end
 
       defmodule MyApp.Template do
-        use Ash.Resource, extensions: [AshBorrow]
+        use Ash.Resource, extensions: [AshOwnership]
 
         relationships do
           used_by :documents, MyApp.Document
         end
       end
 
-  `uses` compiles to a `belongs_to` carrying a `:__uses__` marker, and
-  `used_by` to a `has_many` carrying a `:__used_by__` marker — same options,
+      defmodule MyApp.LineItem do
+        use Ash.Resource, extensions: [AshOwnership]
+
+        relationships do
+          belongs_to :document, MyApp.Document   # owner
+          uses :product, MyApp.Product           # non-owning reference
+          ancestor :org, MyApp.Org               # denormalized ancestor id
+        end
+      end
+
+  `uses` compiles to a `belongs_to` carrying a `:__uses__` marker, `used_by`
+  to a `has_many` carrying a `:__used_by__` marker, and `ancestor` to a
+  `belongs_to` carrying a `:__ancestor__` marker — same options,
   same defaults, so every Ash feature (loading, forms, policies, migrations)
   works unchanged while verifiers and other extensions can tell non-owning
   references apart from containment.
@@ -60,8 +80,8 @@ defmodule AshBorrow do
 
   Hard deletes are restricted by the foreign key (a verifier keeps
   `on_delete` from trading that away), and archives — which no foreign key
-  can see — are rejected by `AshBorrow.Changes.EnsureNotUsed`. The reverse
-  direction is guarded by `AshBorrow.Changes.EnsureTargetLive`, which rejects
+  can see — are rejected by `AshOwnership.Changes.EnsureNotUsed`. The reverse
+  direction is guarded by `AshOwnership.Changes.EnsureTargetLive`, which rejects
   pointing a `uses` foreign key at an archived or missing target.
   """
 
@@ -95,7 +115,7 @@ defmodule AshBorrow do
                      Declares a non-owning use of another resource.
 
                      Compiles to a `belongs_to` with #{describe}.
-                     The destination must use the `AshBorrow` extension.
+                     The destination must use the `AshOwnership` extension.
                      """,
                      examples: [
                        """
@@ -137,27 +157,59 @@ defmodule AshBorrow do
     args: [:name, :destination]
   }
 
+  @ancestor %Spark.Dsl.Entity{
+    name: :ancestor,
+    describe: """
+    Declares a denormalized ancestor key.
+
+    Compiles to a `belongs_to`. The record's real parent is some other
+    relationship; this one only carries an ancestor's id for tenant filtering,
+    policy checks and indexes.
+
+    The target needs no reverse relationship: cascades reach this record
+    through its real parent, and the foreign key still keeps the ancestor from
+    being deleted out from under it.
+    """,
+    examples: [
+      """
+      ancestor :org, Org
+      """
+    ],
+    no_depend_modules: [:destination],
+    target: Ash.Resource.Relationships.BelongsTo,
+    schema: Ash.Resource.Relationships.BelongsTo.opt_schema(),
+    transform: {__MODULE__, :transform_ancestor, []},
+    args: [:name, :destination]
+  }
+
   use Spark.Dsl.Extension,
     dsl_patches:
       Enum.map(
-        [@used_by | @uses_entities],
+        [@used_by, @ancestor | @uses_entities],
         &%Spark.Dsl.Patch.AddEntity{section_path: [:relationships], entity: &1}
       ),
     transformers: [
-      AshBorrow.Transformers.AddTargetGuard,
-      AshBorrow.Transformers.AddDestroyGuard
+      AshOwnership.Transformers.AddTargetGuard,
+      AshOwnership.Transformers.AddDestroyGuard
     ],
     verifiers: [
-      AshBorrow.Verifiers.UsesTargetEnabled,
-      AshBorrow.Verifiers.RequiresUses,
-      AshBorrow.Verifiers.UsesOnDeleteRestrict,
-      AshBorrow.Verifiers.UsedByConsistency
+      AshOwnership.Verifiers.UsesTargetEnabled,
+      AshOwnership.Verifiers.RequiresUses,
+      AshOwnership.Verifiers.UsesOnDeleteRestrict,
+      AshOwnership.Verifiers.UsedByConsistency
     ]
 
   @doc false
   def transform_uses(belongs_to) do
     with {:ok, belongs_to} <- Ash.Resource.Relationships.BelongsTo.transform(belongs_to) do
       {:ok, Map.put(belongs_to, :__uses__, true)}
+    end
+  end
+
+  @doc false
+  def transform_ancestor(belongs_to) do
+    with {:ok, belongs_to} <- Ash.Resource.Relationships.BelongsTo.transform(belongs_to) do
+      {:ok, Map.put(belongs_to, :__ancestor__, true)}
     end
   end
 

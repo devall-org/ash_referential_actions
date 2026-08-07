@@ -1,4 +1,4 @@
-defmodule AshBorrow.Changes.EnsureTargetLive do
+defmodule AshOwnership.Changes.EnsureTargetLive do
   @moduledoc """
   Runtime guard added to every create and update action of an
   resource that declares `uses`: writing a `uses` foreign key is rejected
@@ -51,12 +51,12 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
   def atomic(changeset, _opts, _context) do
     cond do
       touches_uses_key?(changeset) ->
-        {:not_atomic, "AshBorrow.Changes.EnsureTargetLive must query the borrowed target"}
+        {:not_atomic, "AshOwnership.Changes.EnsureTargetLive must query the borrowed target"}
 
       has_other_changes?(changeset) ->
         {:not_atomic,
          "a later change could set a uses key atomically, " <>
-           "which AshBorrow.Changes.EnsureTargetLive must verify"}
+           "which AshOwnership.Changes.EnsureTargetLive must verify"}
 
       true ->
         {:ok, changeset}
@@ -92,7 +92,7 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
   defp uses_rels(resource) do
     resource
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshBorrow.Info.uses?/1)
+    |> Enum.filter(&AshOwnership.Info.uses?/1)
   end
 
   defp check_changing_keys(changeset) do
@@ -140,7 +140,12 @@ defmodule AshBorrow.Changes.EnsureTargetLive do
       is_nil(value) ->
         :ok
 
-      AshBorrow.Query.exists?(rel, [{rel.destination_attribute, value}], changeset, "FOR SHARE") ->
+      AshOwnership.Query.exists?(
+        rel,
+        [{rel.destination_attribute, value}],
+        changeset,
+        "FOR SHARE"
+      ) ->
         :ok
 
       true ->

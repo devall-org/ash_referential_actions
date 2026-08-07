@@ -1,18 +1,18 @@
-defmodule AshBorrow.OnDeleteTest do
+defmodule AshOwnership.OnDeleteTest do
   use ExUnit.Case, async: true
 
   import Spark.Test
 
   defmodule Repo do
     @moduledoc false
-    use AshPostgres.Repo, otp_app: :ash_borrow, warn_on_missing_ash_functions?: false
+    use AshPostgres.Repo, otp_app: :ash_ownership, warn_on_missing_ash_functions?: false
 
     def min_pg_version, do: %Version{major: 16, minor: 0, patch: 0}
   end
 
   defmodule PgSnapshot do
     @moduledoc false
-    use Ash.Resource, domain: nil, extensions: [AshBorrow]
+    use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
     attributes do
       uuid_primary_key :id
@@ -23,15 +23,15 @@ defmodule AshBorrow.OnDeleteTest do
     end
 
     relationships do
-      used_by :nilify_docs, AshBorrow.OnDeleteTest.NilifyDoc do
+      used_by :nilify_docs, AshOwnership.OnDeleteTest.NilifyDoc do
         destination_attribute :pg_snapshot_id
       end
 
-      used_by :restrict_docs, AshBorrow.OnDeleteTest.RestrictDoc do
+      used_by :restrict_docs, AshOwnership.OnDeleteTest.RestrictDoc do
         destination_attribute :pg_snapshot_id
       end
 
-      used_by :ignore_docs, AshBorrow.OnDeleteTest.IgnoreDoc do
+      used_by :ignore_docs, AshOwnership.OnDeleteTest.IgnoreDoc do
         destination_attribute :pg_snapshot_id
       end
     end
@@ -45,11 +45,11 @@ defmodule AshBorrow.OnDeleteTest do
           use Ash.Resource,
             domain: nil,
             data_layer: AshPostgres.DataLayer,
-            extensions: [AshBorrow]
+            extensions: [AshOwnership]
 
           postgres do
             table "nilify_doc"
-            repo(AshBorrow.OnDeleteTest.Repo)
+            repo(AshOwnership.OnDeleteTest.Repo)
 
             references do
               reference(:pg_snapshot, on_delete: :nilify)
@@ -65,7 +65,7 @@ defmodule AshBorrow.OnDeleteTest do
           end
 
           relationships do
-            uses :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
+            uses :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
           end
         end
       end
@@ -81,11 +81,11 @@ defmodule AshBorrow.OnDeleteTest do
           use Ash.Resource,
             domain: nil,
             data_layer: AshPostgres.DataLayer,
-            extensions: [AshBorrow]
+            extensions: [AshOwnership]
 
           postgres do
             table "ignore_doc"
-            repo(AshBorrow.OnDeleteTest.Repo)
+            repo(AshOwnership.OnDeleteTest.Repo)
 
             references do
               reference(:pg_snapshot, ignore?: true)
@@ -101,7 +101,7 @@ defmodule AshBorrow.OnDeleteTest do
           end
 
           relationships do
-            uses :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
+            uses :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
           end
         end
       end
@@ -116,11 +116,11 @@ defmodule AshBorrow.OnDeleteTest do
         use Ash.Resource,
           domain: nil,
           data_layer: AshPostgres.DataLayer,
-          extensions: [AshBorrow]
+          extensions: [AshOwnership]
 
         postgres do
           table "restrict_doc"
-          repo(AshBorrow.OnDeleteTest.Repo)
+          repo(AshOwnership.OnDeleteTest.Repo)
 
           references do
             reference(:pg_snapshot, on_delete: :restrict)
@@ -136,12 +136,12 @@ defmodule AshBorrow.OnDeleteTest do
         end
 
         relationships do
-          uses :pg_snapshot, AshBorrow.OnDeleteTest.PgSnapshot
+          uses :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
         end
       end
     end
 
-    rel = Ash.Resource.Info.relationship(AshBorrow.OnDeleteTest.RestrictDoc, :pg_snapshot)
-    assert AshBorrow.Info.uses?(rel)
+    rel = Ash.Resource.Info.relationship(AshOwnership.OnDeleteTest.RestrictDoc, :pg_snapshot)
+    assert AshOwnership.Info.uses?(rel)
   end
 end

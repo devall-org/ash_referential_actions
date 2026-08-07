@@ -1,6 +1,6 @@
-defmodule AshBorrow.Transformers.AddTargetGuard do
+defmodule AshOwnership.Transformers.AddTargetGuard do
   @moduledoc false
-  # Prepends AshBorrow.Changes.EnsureTargetLive to every create and update
+  # Prepends AshOwnership.Changes.EnsureTargetLive to every create and update
   # action of a user resource, so a uses foreign key can never be
   # pointed at an archived or missing target.
   use Spark.Dsl.Transformer
@@ -21,7 +21,7 @@ defmodule AshBorrow.Transformers.AddTargetGuard do
     # Nothing to guard without uses edges. Skipping keeps the extension
     # free to sit on a base resource module: resources that use nothing
     # are untouched, and in particular stay atomic-capable for bulk updates.
-    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.uses?/1) do
+    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshOwnership.Info.uses?/1) do
       add_guard(dsl_state)
     else
       {:ok, dsl_state}
@@ -35,7 +35,7 @@ defmodule AshBorrow.Transformers.AddTargetGuard do
     |> Enum.reduce({:ok, dsl_state}, fn action, {:ok, dsl_state} ->
       with {:ok, guard} <-
              Transformer.build_entity(Ash.Resource.Dsl, [:actions, action.type], :change,
-               change: {AshBorrow.Changes.EnsureTargetLive, []}
+               change: {AshOwnership.Changes.EnsureTargetLive, []}
              ) do
         new_action = %{action | changes: [guard | action.changes]}
 

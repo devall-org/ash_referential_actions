@@ -1,7 +1,7 @@
-defmodule AshBorrow.GuardTest do
+defmodule AshOwnership.GuardTest do
   use ExUnit.Case, async: true
 
-  alias AshBorrow.Test.Support.GuardResources.{
+  alias AshOwnership.Test.Support.GuardResources.{
     Doc,
     FilteredDoc,
     FilteredSnapshot,
@@ -22,7 +22,7 @@ defmodule AshBorrow.GuardTest do
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
 
       assert Exception.message(error) =~
-               "still used by AshBorrow.Test.Support.GuardResources.Doc via :docs"
+               "still used by AshOwnership.Test.Support.GuardResources.Doc via :docs"
     end
 
     test "archiving succeeds once every borrower is archived" do
@@ -73,7 +73,7 @@ defmodule AshBorrow.GuardTest do
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
 
       assert Exception.message(error) =~
-               "still used by AshBorrow.Test.Support.GuardResources.FilteredDoc via :filtered_docs"
+               "still used by AshOwnership.Test.Support.GuardResources.FilteredDoc via :filtered_docs"
     end
   end
 
@@ -171,7 +171,7 @@ defmodule AshBorrow.GuardTest do
 
   describe "atomic foreign key updates" do
     test "an atomic bulk update cannot re-point at an archived target" do
-      alias AshBorrow.Test.Support.GuardResources.{Doc, Snapshot}
+      alias AshOwnership.Test.Support.GuardResources.{Doc, Snapshot}
 
       live_snapshot = create!(Snapshot)
       archived_snapshot = create!(Snapshot)
@@ -192,7 +192,7 @@ defmodule AshBorrow.GuardTest do
   end
 
   describe "destroy guard vs global preparations" do
-    alias AshBorrow.Test.Support.GuardResources.{PrepDoc, PrepSnapshot}
+    alias AshOwnership.Test.Support.GuardResources.{PrepDoc, PrepSnapshot}
 
     test "a borrower hidden by a flag-aware global preparation still blocks the destroy" do
       snapshot = create!(PrepSnapshot)
@@ -203,7 +203,7 @@ defmodule AshBorrow.GuardTest do
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
 
       assert Exception.message(error) =~
-               "still used by AshBorrow.Test.Support.GuardResources.PrepDoc via :prep_docs"
+               "still used by AshOwnership.Test.Support.GuardResources.PrepDoc via :prep_docs"
     end
 
     test "a live target hidden from default reads can still be borrowed" do
@@ -220,7 +220,7 @@ defmodule AshBorrow.GuardTest do
         @moduledoc false
         use Ash.Resource,
           domain: nil,
-          extensions: [AshBorrow, AshBorrow]
+          extensions: [AshOwnership, AshOwnership]
 
         attributes do
           uuid_primary_key :id
@@ -240,7 +240,7 @@ defmodule AshBorrow.GuardTest do
         @moduledoc false
         use Ash.Resource,
           domain: nil,
-          extensions: [AshBorrow, AshBorrow]
+          extensions: [AshOwnership, AshOwnership]
 
         attributes do
           uuid_primary_key :id
@@ -257,7 +257,7 @@ defmodule AshBorrow.GuardTest do
         |> Enum.flat_map(fn action -> Map.get(action, :changes, []) end)
         |> Enum.filter(fn
           %Ash.Resource.Change{change: {module, _}} ->
-            module in [AshBorrow.Changes.EnsureTargetLive, AshBorrow.Changes.EnsureNotUsed]
+            module in [AshOwnership.Changes.EnsureTargetLive, AshOwnership.Changes.EnsureNotUsed]
 
           _ ->
             false

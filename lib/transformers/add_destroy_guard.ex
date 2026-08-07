@@ -1,7 +1,7 @@
-defmodule AshBorrow.Transformers.AddDestroyGuard do
+defmodule AshOwnership.Transformers.AddDestroyGuard do
   @moduledoc false
-  # Prepends AshBorrow.Changes.EnsureNotUsed to every destroy action of a
-  # resource with the AshBorrow extension, so a used record can neither be hard-deleted nor
+  # Prepends AshOwnership.Changes.EnsureNotUsed to every destroy action of a
+  # resource with the AshOwnership extension, so a used record can neither be hard-deleted nor
   # archived (archival rewrites destroys into soft updates, keeping the
   # change) while live users exist.
   #
@@ -33,7 +33,7 @@ defmodule AshBorrow.Transformers.AddDestroyGuard do
     # Nothing to enumerate without used_by edges. A resource that is
     # actually used always has them (the using-side verifier requires
     # a matching one), so skipping here only spares resources nobody uses.
-    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshBorrow.Info.used_by?/1) do
+    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshOwnership.Info.used_by?/1) do
       add_guard(dsl_state)
     else
       {:ok, dsl_state}
@@ -47,7 +47,7 @@ defmodule AshBorrow.Transformers.AddDestroyGuard do
     |> Enum.reduce({:ok, dsl_state}, fn destroy_action, {:ok, dsl_state} ->
       with {:ok, guard} <-
              Transformer.build_entity(Ash.Resource.Dsl, [:actions, :destroy], :change,
-               change: {AshBorrow.Changes.EnsureNotUsed, []}
+               change: {AshOwnership.Changes.EnsureNotUsed, []}
              ) do
         new_action = %{destroy_action | changes: [guard | destroy_action.changes]}
 

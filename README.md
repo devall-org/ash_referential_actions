@@ -1,4 +1,4 @@
-# AshBorrow
+# AshOwnership
 
 Non-owning relationships for Ash: `uses` references that can never dangle.
 
@@ -14,11 +14,11 @@ Non-owning relationships for Ash: `uses` references that can never dangle.
   vanish while documents still use it. Other examples: immutable document
   snapshots, shared images or files, license/reference rows.
 
-AshBorrow gives the second meaning its own vocabulary, borrowed from Rust:
+AshOwnership gives the second meaning its own vocabulary, borrowed from Rust:
 a `uses` edge is a borrow of the target, and the target cannot be dropped
 while any borrow is alive.
 
-| Rust | AshBorrow |
+| Rust | AshOwnership |
 | --- | --- |
 | ownership, drop cascades | containment `belongs_to` (see [ash_cascade_archival](https://hex.pm/packages/ash_cascade_archival)) |
 | borrow (`&T`) | `uses` relationship |
@@ -30,7 +30,7 @@ while any borrow is alive.
 ```elixir
 # The using side
 defmodule MyApp.Document do
-  use Ash.Resource, extensions: [AshBorrow]
+  use Ash.Resource, extensions: [AshOwnership]
 
   relationships do
     uses :template, MyApp.Template
@@ -39,7 +39,7 @@ end
 
 # The used side
 defmodule MyApp.Template do
-  use Ash.Resource, extensions: [AshBorrow]
+  use Ash.Resource, extensions: [AshOwnership]
 
   relationships do
     used_by :documents, MyApp.Document
@@ -73,16 +73,16 @@ Enforced per path:
 
 * **Hard delete** — the protection itself comes from the database: any real
   foreign key already restricts deleting referenced rows, for `uses` and
-  plain `belongs_to` alike. What AshBorrow adds is keeping it that way — a
+  plain `belongs_to` alike. What AshOwnership adds is keeping it that way — a
   verifier rejects `on_delete: :delete/:nilify` on `uses` edges, so the
   guarantee cannot be silently traded away — and the runtime guard below also
   rejects destroys, covering data layers without foreign key constraints
   (e.g. `Ash.DataLayer.Ets`). Deleting an *unused* row succeeds.
 * **Soft delete (archive)** (when the used resource also uses
   [ash_archival](https://hex.pm/packages/ash_archival)) — archival is an
-  `archived_at` update, which no foreign key can see. AshBorrow injects a
-  runtime guard (`AshBorrow.Changes.EnsureNotUsed`) into every destroy
-  action of a resource with the AshBorrow extension: the destroy is rejected while live
+  `archived_at` update, which no foreign key can see. AshOwnership injects a
+  runtime guard (`AshOwnership.Changes.EnsureNotUsed`) into every destroy
+  action of a resource with the AshOwnership extension: the destroy is rejected while live
   users exist. Users are enumerated through `used_by` (which is
   therefore required for every uses edge), querying with the
   relationship's `read_action` if declared, otherwise the user's primary
@@ -93,7 +93,7 @@ Enforced per path:
   see the `order` option of ash_cascade_archival) and the used resource becomes
   archivable.
 * **Using a dead target** — the reverse direction is guarded too:
-  `AshBorrow.Changes.EnsureTargetLive` is injected into every create and
+  `AshOwnership.Changes.EnsureTargetLive` is injected into every create and
   update action of a using resource, rejecting writes that point a `uses` foreign
   key at an archived or missing target — whether the key arrives as direct
   input or through `manage_relationship`. Without it, a ghost reference
@@ -104,8 +104,8 @@ Enforced per path:
 All cross-module checks run on the user side, so compile-time
 dependencies flow one way (using side → used side):
 
-* `uses` must target an `AshBorrow` resource.
-* A plain `belongs_to` targeting a resource with the AshBorrow extension is rejected unless it
+* `uses` must target an `AshOwnership` resource.
+* A plain `belongs_to` targeting a resource with the AshOwnership extension is rejected unless it
   is containment — that is, unless the used resource declares the reverse
   `has_many`/`has_one` back. A used resource may own children of its own; those
   go down with it and need no guard. Anything else is a non-owning reference
@@ -135,7 +135,7 @@ lock support (e.g. ETS), where a use created concurrently with a destroy is
 not serialized — elsewhere they take paired `FOR UPDATE`/`FOR SHARE` locks on
 the used resource's row; and custom global preparations
 that filter default reads must pass guard queries through (check
-`query.context[:ash_borrow_guard?]`) or they will hide live rows from the
+`query.context[:ash_ownership_guard?]`) or they will hide live rows from the
 guards.
 
 ## Installation
@@ -143,7 +143,7 @@ guards.
 ```elixir
 def deps do
   [
-    {:ash_borrow, "~> 0.1.0"}
+    {:ash_ownership, "~> 0.1.0"}
   ]
 end
 ```
@@ -153,5 +153,5 @@ end
 The two libraries are independent and compose without knowing about each
 other: cascade archival's verifier only constrains `belongs_to` edges whose
 destination is archival with cascade in place, while a `uses` edge points
-at a resource with the AshBorrow extension whose archival (if any) is guarded. Together they
+at a resource with the AshOwnership extension whose archival (if any) is guarded. Together they
 split `belongs_to` cleanly into containment chains and non-owning uses.

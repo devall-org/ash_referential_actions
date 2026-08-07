@@ -1,4 +1,4 @@
-defmodule AshBorrow.Verifiers.UsesOnDeleteRestrict do
+defmodule AshOwnership.Verifiers.UsesOnDeleteRestrict do
   @moduledoc false
   # The foreign key of a `uses` relationship is what excludes hard deletes
   # of used records, so its reference must keep restrict semantics.
@@ -20,7 +20,7 @@ defmodule AshBorrow.Verifiers.UsesOnDeleteRestrict do
     uses_names =
       dsl_state
       |> Ash.Resource.Info.relationships()
-      |> Enum.filter(&AshBorrow.Info.uses?/1)
+      |> Enum.filter(&AshOwnership.Info.uses?/1)
       |> MapSet.new(& &1.name)
 
     dsl_state
