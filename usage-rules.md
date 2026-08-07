@@ -2,7 +2,9 @@
 
 ## Purpose
 
-AshOwnership distinguishes non-owning references from containment. A `uses`
+AshOwnership names what a `belongs_to` means: containment (plain
+`belongs_to`), a non-owning reference (`uses`), or a denormalized ancestor id
+(`ancestor`). A `uses`
 relationship is a `belongs_to` that does not own its target: the target is
 not the record's parent, may be shared by many users, and can neither be
 hard-deleted nor archived while live users exist.
@@ -28,6 +30,12 @@ defmodule Template do
   end
 end
 ```
+
+* `ancestor` compiles to `belongs_to` with a `:__ancestor__` marker. Use it
+  when the column only carries an ancestor's id (tenant filtering, policies,
+  indexes) and the record's real parent is another relationship. The target
+  needs no reverse relationship, and cascades reach the record through its
+  real parent.
 
 * `uses` compiles to `belongs_to` with a `:__uses__` marker — same
   options and defaults as `belongs_to`; required/optional (`allow_nil?`) and
