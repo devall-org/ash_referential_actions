@@ -1,10 +1,11 @@
 # AshOwnership
 
-Non-owning relationships for Ash: `uses` references that can never dangle.
+Ownership vocabulary for Ash: `uses` references that can never dangle, and
+`ancestor` keys that are not parents.
 
 ## The problem
 
-`belongs_to` conflates two meanings:
+`belongs_to` conflates three meanings:
 
 * **Containment** — the record is owned by its parent and must go down with it.
   `Comment belongs_to Post`: archiving the post archives the comment.
@@ -13,10 +14,18 @@ Non-owning relationships for Ash: `uses` references that can never dangle.
   the template must never take the documents down — nor may the template
   vanish while documents still use it. Other examples: immutable document
   snapshots, shared images or files, license/reference rows.
+* **Denormalized ancestor key** — the column carries a grandparent's id for
+  tenant filtering, policies, or indexes. The real parent is a different
+  relationship, and the ancestor should not carry a reverse relationship
+  back to every descendant table.
 
-AshOwnership gives the second meaning its own vocabulary, borrowed from Rust:
-a `uses` edge is a borrow of the target, and the target cannot be dropped
-while any borrow is alive.
+Reading a resource, you cannot tell these apart: all three are
+`belongs_to`. That matters, because tooling that walks containment — cascade
+archival above all — has to guess. AshOwnership gives each meaning its own
+name.
+
+The `uses` vocabulary is borrowed from Rust: a `uses` edge is a borrow of the
+target, and the target cannot be dropped while any borrow is alive.
 
 | Rust | AshOwnership |
 | --- | --- |
@@ -64,6 +73,33 @@ Since Ash defaults `public?` to `false`, shorthands mirroring `ash_req_opt`'s
 | `opt_uses`     | `true`              | `true`    |
 | `opt_priv_uses` | `true`              | `false`   |
 
+### Ancestor keys
+
+`ancestor` compiles to a `belongs_to` carrying an `:__ancestor__` marker. Use
+it when the column only holds an ancestor's id — tenant filtering, policies,
+indexes — and the record's real parent is a different relationship.
+
+```elixir
+defmodule MyApp.Comment do
+  use Ash.Resource, extensions: [AshOwnership]
+
+  relationships do
+    belongs_to :post, MyApp.Post          # the real parent
+    ancestor :account, MyApp.Account      # denormalized tenant key
+  end
+end
+```
+
+The target needs no reverse relationship: a cascade reaches this record
+through its real parent, and the foreign key still keeps the ancestor from
+being deleted out from under it. Without `ancestor`, an account with fifty
+descendant tables would need fifty `has_many` declarations that exist only to
+satisfy a containment check — and each one would be a second cascade path to
+rows the real parent already covers.
+
+`ancestor` carries no archive guard: an ancestor is not borrowed, it is
+merely denormalized.
+
 ## The invariant
 
 > While live users exist, the used record can neither be deleted nor
@@ -90,7 +126,7 @@ Enforced per path:
   neither read policies nor action-level filters can silently hide a live
   user. Archival's global filter still applies, so archived users do
   not block — archive the users first (or let an ancestor cascade do it,
-  see the `order` option of ash_cascade_archival) and the used resource becomes
+  see the `archive_last` option of ash_cascade_archival) and the used resource becomes
   archivable.
 * **Using a dead target** — the reverse direction is guarded too:
   `AshOwnership.Changes.EnsureTargetLive` is injected into every create and

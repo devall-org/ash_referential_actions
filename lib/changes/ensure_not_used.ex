@@ -12,7 +12,7 @@ defmodule AshOwnership.Changes.EnsureNotUsed do
   applies — an archived user does not block. Inside a transaction, users archived
   earlier in the same transaction are already invisible, which lets an
   ancestor cascade pass deterministically as long as it archives users
-  before the used resource (see the `order` option of `ash_cascade_archival`).
+  before the used resource (see the `archive_last` option of `ash_cascade_archival`).
 
   Before counting, the record being destroyed is locked `FOR UPDATE` where the
   data layer supports it, pairing with the `FOR SHARE` lock

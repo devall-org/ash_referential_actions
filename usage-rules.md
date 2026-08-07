@@ -114,7 +114,7 @@ Notes:
   rows from the guards.
 * Inside one transaction, users archived earlier are already invisible —
   an ancestor cascade passes deterministically if it orders users before
-  the used resource (`order` option of ash_cascade_archival).
+  the used resource (`archive_last` option of ash_cascade_archival).
 * The destroy guard is not atomic-compatible: bulk destroys of used resources
   need `strategy: [:stream]` (Ash's default bulk strategy is `:atomic`);
   ash_archival's cascade already passes a stream-capable strategy. Using-side
