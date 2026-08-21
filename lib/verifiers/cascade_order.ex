@@ -29,16 +29,18 @@ defmodule AshReferentialActions.Verifiers.CascadeOrder do
   end
 
   defp restrict_edges(dsl_state, archive_related) do
-    for restricted_name <- archive_related,
-        restricted_rel = relationship(dsl_state, restricted_name),
-        restricted_rel != nil,
-        referrers = restricting_resources(restricted_rel.destination),
-        referrers != MapSet.new(),
-        referrer_name <- archive_related,
-        referrer_name != restricted_name,
+    for referrer_name <- archive_related,
         referrer_rel = relationship(dsl_state, referrer_name),
         referrer_rel != nil,
-        MapSet.member?(referrers, referrer_rel.destination),
+        restricted_name <- archive_related,
+        restricted_name != referrer_name,
+        restricted_rel = relationship(dsl_state, restricted_name),
+        restricted_rel != nil,
+        Enum.any?(Ash.Resource.Info.relationships(referrer_rel.destination), fn forward ->
+          AshReferentialActions.Info.guarded?(forward) and
+            AshReferentialActions.Info.restrict?(forward) and
+            forward.destination == restricted_rel.destination
+        end),
         uniq: true do
       {referrer_name, restricted_name}
     end
@@ -77,12 +79,5 @@ defmodule AshReferentialActions.Verifiers.CascadeOrder do
     dsl_state
     |> Ash.Resource.Info.relationships()
     |> Enum.find(&(&1.name == name))
-  end
-
-  defp restricting_resources(module) do
-    module
-    |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshReferentialActions.Info.restrict?/1)
-    |> MapSet.new(& &1.destination)
   end
 end

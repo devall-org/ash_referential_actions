@@ -20,10 +20,10 @@ defmodule AshReferentialActions.Verifiers.ArchivalGuardChannels do
   end
 
   defp channel_error(module, forward) do
-    reverse =
+    reverses =
       forward.destination
       |> Ash.Resource.Info.relationships()
-      |> Enum.find(fn reverse ->
+      |> Enum.filter(fn reverse ->
         reverse.destination == module and
           AshReferentialActions.Info.action(reverse) ==
             AshReferentialActions.Info.action(forward) and
@@ -34,11 +34,11 @@ defmodule AshReferentialActions.Verifiers.ArchivalGuardChannels do
       unclean?(forward) ->
         error(module, forward, "forward guard read action is filtered or uncallable")
 
-      is_nil(reverse) ->
+      reverses == [] ->
         nil
 
-      unclean?(reverse) ->
-        error(module, forward, "reverse guard read action is filtered or uncallable")
+      Enum.all?(reverses, &unclean?/1) ->
+        error(module, forward, "every reverse guard read action is filtered or uncallable")
 
       true ->
         nil
