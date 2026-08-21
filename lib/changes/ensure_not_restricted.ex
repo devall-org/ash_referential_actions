@@ -60,7 +60,7 @@ defmodule AshReferentialActions.Changes.EnsureNotRestricted do
 
     changeset.resource
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshReferentialActions.Info.restrict?/1)
+    |> Enum.filter(&AshReferentialActions.Info.restrict_reverse?/1)
     |> Enum.reduce(changeset, fn rel, changeset ->
       source_value = AshReferentialActions.Query.data_attribute!(changeset, rel.source_attribute)
 

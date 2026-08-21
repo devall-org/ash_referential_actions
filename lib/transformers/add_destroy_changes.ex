@@ -16,7 +16,7 @@ defmodule AshReferentialActions.Transformers.AddDestroyChanges do
   @impl true
   def transform(dsl_state) do
     relationships = Ash.Resource.Info.relationships(dsl_state)
-    restrict? = Enum.any?(relationships, &reverse?(&1, :restrict))
+    restrict? = Enum.any?(relationships, &AshReferentialActions.Info.restrict_reverse?/1)
     nilify_rels = Enum.filter(relationships, &reverse?(&1, :nilify))
 
     if restrict? or nilify_rels != [] do

@@ -17,6 +17,13 @@ defmodule AshReferentialActions.Info do
 
   def guarded?(_relationship), do: false
 
+  @doc "Returns true for reverse relationships that restrict target destruction."
+  def restrict_reverse?(%kind{} = relationship)
+      when kind in [Ash.Resource.Relationships.HasMany, Ash.Resource.Relationships.HasOne],
+      do: restrict?(relationship)
+
+  def restrict_reverse?(_relationship), do: false
+
   @doc "Returns true if the resource module has the extension."
   def enabled?(resource) when is_atom(resource) do
     AshReferentialActions in (Spark.Dsl.Extension.get_persisted(resource, :extensions) || [])
