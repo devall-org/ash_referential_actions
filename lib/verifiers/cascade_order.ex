@@ -29,22 +29,60 @@ defmodule AshReferentialActions.Verifiers.CascadeOrder do
   end
 
   defp restrict_edges(dsl_state, archive_related) do
-    for referrer_name <- archive_related,
-        referrer_rel = relationship(dsl_state, referrer_name),
-        referrer_rel != nil,
-        restricted_name <- archive_related,
+    subtrees =
+      Map.new(archive_related, fn name ->
+        destinations =
+          case relationship(dsl_state, name) do
+            nil -> MapSet.new()
+            relationship -> cascade_subtree(relationship.destination)
+          end
+
+        {name, destinations}
+      end)
+
+    for {referrer_name, referrer_resources} <- subtrees,
+        {restricted_name, restricted_resources} <- subtrees,
         restricted_name != referrer_name,
-        restricted_rel = relationship(dsl_state, restricted_name),
-        restricted_rel != nil,
-        Enum.any?(Ash.Resource.Info.relationships(referrer_rel.destination), fn forward ->
-          AshReferentialActions.Info.guarded?(forward) and
-            AshReferentialActions.Info.restrict?(forward) and
-            forward.destination == restricted_rel.destination
-        end),
+        restricts_any?(referrer_resources, restricted_resources),
         uniq: true do
       {referrer_name, restricted_name}
     end
   end
+
+  defp cascade_subtree(resource, seen \\ MapSet.new()) do
+    if MapSet.member?(seen, resource) do
+      seen
+    else
+      seen = MapSet.put(seen, resource)
+
+      resource
+      |> Ash.Resource.Info.relationships()
+      |> Enum.filter(fn relationship ->
+        reverse?(relationship) and AshReferentialActions.Info.cascade?(relationship)
+      end)
+      |> Enum.reduce(seen, fn relationship, seen ->
+        cascade_subtree(relationship.destination, seen)
+      end)
+    end
+  end
+
+  defp restricts_any?(referrer_resources, restricted_resources) do
+    Enum.any?(referrer_resources, fn resource ->
+      resource
+      |> Ash.Resource.Info.relationships()
+      |> Enum.any?(fn relationship ->
+        match?(%Ash.Resource.Relationships.BelongsTo{}, relationship) and
+          AshReferentialActions.Info.restrict?(relationship) and
+          MapSet.member?(restricted_resources, relationship.destination)
+      end)
+    end)
+  end
+
+  defp reverse?(%kind{})
+       when kind in [Ash.Resource.Relationships.HasMany, Ash.Resource.Relationships.HasOne],
+       do: true
+
+  defp reverse?(_relationship), do: false
 
   defp violated?(edges, names) do
     position = names |> Enum.with_index() |> Map.new()
