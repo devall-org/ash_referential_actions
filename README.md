@@ -28,6 +28,7 @@ view_has_many :active_documents, Document, filter: expr(is_active)
 ```
 
 Resources using the extension cannot declare plain attributable `belongs_to`, `has_many`, or `has_one`. Use one of `cascade_*`, `restrict_*`, `nilify_*`, or `view_*`.
+Generated reverse relationships to resources outside the extension are exempt.
 
 Required/optional and private/public variants are available for `belongs_to`:
 

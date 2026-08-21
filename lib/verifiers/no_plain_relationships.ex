@@ -24,6 +24,10 @@ defmodule AshReferentialActions.Verifiers.NoPlainRelationships do
     action = AshReferentialActions.Info.action(rel)
 
     cond do
+      is_nil(action) and reverse?(rel) and
+          not AshReferentialActions.Info.enabled?(rel.destination) ->
+        nil
+
       is_nil(action) ->
         dsl_error(module, rel, """
         Plain #{relationship_type(rel)} is forbidden on resources using AshReferentialActions.

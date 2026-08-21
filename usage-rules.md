@@ -10,6 +10,9 @@ On every resource using AshReferentialActions, attributable `belongs_to`, `has_m
 - `view_*`: lifecycle-neutral relationship used only for loading/querying.
 
 Never use plain `belongs_to`, `has_many`, or `has_one` on an enabled resource. The verifier rejects them.
+Generated reverse relationships whose destination does not use AshReferentialActions
+(for example audit/version resources owned by another extension) are exempt because
+their lifecycle is outside this graph.
 
 Declare the same action on both sides and align both key attributes:
 
