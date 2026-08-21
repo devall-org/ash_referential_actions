@@ -11,7 +11,10 @@ defmodule AshReferentialActions.Verifiers.ArchivalGuardChannels do
 
     dsl_state
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&(match?(%BelongsTo{}, &1) and AshReferentialActions.Info.guarded?(&1)))
+    |> Enum.filter(fn relationship ->
+      match?(%BelongsTo{}, relationship) and
+        AshReferentialActions.Info.action(relationship) in [:restrict, :nilify]
+    end)
     |> Enum.find_value(fn forward -> channel_error(module, forward) end)
     |> case do
       nil -> :ok
