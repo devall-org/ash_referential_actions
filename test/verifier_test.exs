@@ -41,6 +41,10 @@ defmodule AshReferentialActions.VerifierTest do
         postgres do
           table "postgres_nilify"
           repo(AshReferentialActions.VerifierTest.Repo)
+
+          references do
+            reference(:parent)
+          end
         end
 
         attributes do

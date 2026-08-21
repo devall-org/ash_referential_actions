@@ -37,8 +37,19 @@ defmodule AshReferentialActions.Transformers.ConfigurePostgresReferences do
             {:ok, Transformer.add_entity(dsl_state, [:postgres, :references], reference)}
           end
 
-        reference when reference.on_delete in [nil, expected] ->
+        reference when reference.on_delete == expected ->
           {:ok, dsl_state}
+
+        reference when is_nil(reference.on_delete) ->
+          updated = %{reference | on_delete: expected}
+
+          {:ok,
+           Transformer.replace_entity(
+             dsl_state,
+             [:postgres, :references],
+             updated,
+             &(&1.relationship == rel.name)
+           )}
 
         reference ->
           {:error,
