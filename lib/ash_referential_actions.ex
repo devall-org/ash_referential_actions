@@ -34,6 +34,11 @@ defmodule AshReferentialActions do
     {:opt_priv, true, false}
   ]
 
+  @ash_relationship_entities Ash.Resource.Dsl.sections()
+                             |> Enum.find(&(&1.name == :relationships))
+                             |> Map.fetch!(:entities)
+                             |> Map.new(&{&1.name, &1})
+
   @belongs_entities (for action <- @actions,
                          {variant, allow_nil?, public?} <- @belongs_variants,
                          not (action == :nilify and allow_nil? == false) do
@@ -47,48 +52,47 @@ defmodule AshReferentialActions do
                          [allow_nil?: allow_nil?, public?: public?]
                          |> Enum.reject(fn {_key, value} -> is_nil(value) end)
 
-                       %Spark.Dsl.Entity{
-                         name: name,
-                         describe: "Declares a #{action} belongs_to relationship.",
-                         examples: ["#{name} :parent, Parent"],
-                         no_depend_modules: [:destination],
-                         target: Ash.Resource.Relationships.BelongsTo,
-                         schema:
-                           Ash.Resource.Relationships.BelongsTo.opt_schema()
-                           |> Keyword.drop(Keyword.keys(fixed)),
-                         transform: {__MODULE__, :transform_relationship, [action]},
-                         args: [:name, :destination],
-                         auto_set_fields: fixed
+                       base = Map.fetch!(@ash_relationship_entities, :belongs_to)
+
+                       %{
+                         base
+                         | name: name,
+                           describe: "Declares a #{action} belongs_to relationship.",
+                           examples: ["#{name} :parent, Parent"],
+                           no_depend_modules: [:destination],
+                           schema: Keyword.drop(base.schema, Keyword.keys(fixed)),
+                           transform: {__MODULE__, :transform_relationship, [action]},
+                           auto_set_fields: fixed
                        }
                      end)
 
   @has_many_entities (for action <- @actions do
                         name = :"#{action}_has_many"
 
-                        %Spark.Dsl.Entity{
-                          name: name,
-                          describe: "Declares a #{action} has_many relationship.",
-                          examples: ["#{name} :children, Child"],
-                          no_depend_modules: [:destination],
-                          target: Ash.Resource.Relationships.HasMany,
-                          schema: Ash.Resource.Relationships.HasMany.opt_schema(),
-                          transform: {__MODULE__, :transform_relationship, [action]},
-                          args: [:name, :destination]
+                        base = Map.fetch!(@ash_relationship_entities, :has_many)
+
+                        %{
+                          base
+                          | name: name,
+                            describe: "Declares a #{action} has_many relationship.",
+                            examples: ["#{name} :children, Child"],
+                            no_depend_modules: [:destination],
+                            transform: {__MODULE__, :transform_relationship, [action]}
                         }
                       end)
 
   @has_one_entities (for action <- @actions do
                        name = :"#{action}_has_one"
 
-                       %Spark.Dsl.Entity{
-                         name: name,
-                         describe: "Declares a #{action} has_one relationship.",
-                         examples: ["#{name} :child, Child"],
-                         no_depend_modules: [:destination],
-                         target: Ash.Resource.Relationships.HasOne,
-                         schema: Ash.Resource.Relationships.HasOne.opt_schema(),
-                         transform: {__MODULE__, :transform_relationship, [action]},
-                         args: [:name, :destination]
+                       base = Map.fetch!(@ash_relationship_entities, :has_one)
+
+                       %{
+                         base
+                         | name: name,
+                           describe: "Declares a #{action} has_one relationship.",
+                           examples: ["#{name} :child, Child"],
+                           no_depend_modules: [:destination],
+                           transform: {__MODULE__, :transform_relationship, [action]}
                        }
                      end)
 
