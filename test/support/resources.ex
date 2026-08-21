@@ -37,7 +37,7 @@ defmodule AshReferentialActions.Test.Resources do
     end
 
     relationships do
-      req_cascade_belongs_to :parent, Resources.CascadeParent
+      cascade_belongs_to :parent, Resources.CascadeParent, allow_nil?: false
     end
   end
 
@@ -75,7 +75,7 @@ defmodule AshReferentialActions.Test.Resources do
     end
 
     relationships do
-      req_restrict_belongs_to :target, Resources.RestrictTarget
+      restrict_belongs_to :target, Resources.RestrictTarget, allow_nil?: false
     end
   end
 
@@ -113,7 +113,7 @@ defmodule AshReferentialActions.Test.Resources do
     end
 
     relationships do
-      opt_nilify_belongs_to :target, Resources.NilifyTarget
+      nilify_belongs_to :target, Resources.NilifyTarget, allow_nil?: true
     end
   end
 end

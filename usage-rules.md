@@ -17,29 +17,25 @@ their lifecycle is outside this graph.
 Declare the same action on both sides and align both key attributes:
 
 ```elixir
-opt_nilify_belongs_to :invoice, Invoice
+nilify_belongs_to :invoice, Invoice, allow_nil?: true
 nilify_has_many :bulk_entries, BulkEntry, destination_attribute: :invoice_id
 ```
 
 Lifecycle reverse relationships (`cascade/restrict/nilify has_many/has_one`) must be unfiltered, attributable, and manual-free. Add separate `view_has_many/view_has_one` relationships for filtered business views.
 
-## Belongs-to variants
+## Belongs-to options
 
-Use the existing req/opt and public/private conventions:
-
-```elixir
-req_cascade_belongs_to
-req_priv_cascade_belongs_to
-opt_cascade_belongs_to
-opt_priv_cascade_belongs_to
-```
-
-The same variants exist for `restrict` and `view`. Nilify only supports optional variants because its foreign key must accept nil:
+Do not create req/opt/private macro variants. Use the normal Ash options on the
+four action macros:
 
 ```elixir
-opt_nilify_belongs_to
-opt_priv_nilify_belongs_to
+cascade_belongs_to :required_parent, Parent, allow_nil?: false
+restrict_belongs_to :optional_target, Target, allow_nil?: true
+view_belongs_to :private_pointer, File, allow_nil?: true, public?: false
 ```
+
+`nilify_belongs_to` always uses `allow_nil?: true`; the verifier rejects a
+non-nullable nilify foreign key.
 
 ## Choose adapters by actual delete behavior
 

@@ -12,15 +12,15 @@ Declare the same action on both sides of an attributable relationship:
 
 ```elixir
 # Parent -> child ownership
-req_cascade_belongs_to :invoice, Invoice
+cascade_belongs_to :invoice, Invoice, allow_nil?: false
 cascade_has_many :line_items, LineItem
 
 # Shared target that cannot disappear while referenced
-req_restrict_belongs_to :template, Template
+restrict_belongs_to :template, Template, allow_nil?: false
 restrict_has_many :documents, Document
 
 # Weak reference cleared when the target disappears
-opt_nilify_belongs_to :invoice, Invoice
+nilify_belongs_to :invoice, Invoice, allow_nil?: true
 nilify_has_many :bulk_entries, BulkEntry
 
 # Query-only relationship with no lifecycle behavior
@@ -30,11 +30,13 @@ view_has_many :active_documents, Document, filter: expr(is_active)
 Resources using the extension cannot declare plain attributable `belongs_to`, `has_many`, or `has_one`. Use one of `cascade_*`, `restrict_*`, `nilify_*`, or `view_*`.
 Generated reverse relationships to resources outside the extension are exempt.
 
-Required/optional and private/public variants are available for `belongs_to`:
+`belongs_to` nullability and visibility use the normal Ash options instead of
+combinatorial macro variants:
 
-- `req_cascade_belongs_to`, `req_priv_cascade_belongs_to`, `opt_cascade_belongs_to`, `opt_priv_cascade_belongs_to`
-- the same variants for `restrict` and `view`
-- `opt_nilify_belongs_to` and `opt_priv_nilify_belongs_to`; nilify can never be required
+- required: `allow_nil?: false`
+- optional: `allow_nil?: true`
+- private: `public?: false`
+- nilify always requires `allow_nil?: true`
 
 ## Adapters
 
@@ -84,7 +86,7 @@ The adapters can be combined when both soft archive and physical delete must sha
 For:
 
 ```elixir
-opt_nilify_belongs_to :invoice, Invoice
+nilify_belongs_to :invoice, Invoice, allow_nil?: true
 ```
 
 AshReferentialActions generates a private update action named from the source attribute, for example:

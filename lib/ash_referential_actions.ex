@@ -13,7 +13,7 @@ defmodule AshReferentialActions do
   The action is declared on both sides of an attributable relationship:
 
       relationships do
-        req_cascade_belongs_to :invoice, Invoice
+        cascade_belongs_to :invoice, Invoice, allow_nil?: false
       end
 
       relationships do
@@ -26,32 +26,14 @@ defmodule AshReferentialActions do
   """
 
   @actions [:cascade, :restrict, :nilify, :view]
-  @belongs_variants [
-    {nil, nil, nil},
-    {:req, false, true},
-    {:req_priv, false, false},
-    {:opt, true, true},
-    {:opt_priv, true, false}
-  ]
 
   @ash_relationship_entities Ash.Resource.Dsl.sections()
                              |> Enum.find(&(&1.name == :relationships))
                              |> Map.fetch!(:entities)
                              |> Map.new(&{&1.name, &1})
 
-  @belongs_entities (for action <- @actions,
-                         {variant, allow_nil?, public?} <- @belongs_variants,
-                         not (action == :nilify and allow_nil? == false) do
-                       name =
-                         case variant do
-                           nil -> :"#{action}_belongs_to"
-                           variant -> :"#{variant}_#{action}_belongs_to"
-                         end
-
-                       fixed =
-                         [allow_nil?: allow_nil?, public?: public?]
-                         |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-
+  @belongs_entities (for action <- @actions do
+                       name = :"#{action}_belongs_to"
                        base = Map.fetch!(@ash_relationship_entities, :belongs_to)
 
                        %{
@@ -60,9 +42,13 @@ defmodule AshReferentialActions do
                            describe: "Declares a #{action} belongs_to relationship.",
                            examples: ["#{name} :parent, Parent"],
                            no_depend_modules: [:destination],
-                           schema: Keyword.drop(base.schema, Keyword.keys(fixed)),
-                           transform: {__MODULE__, :transform_relationship, [action]},
-                           auto_set_fields: fixed
+                           schema:
+                             Keyword.update!(
+                               base.schema,
+                               :public?,
+                               &Keyword.put(&1, :default, true)
+                             ),
+                           transform: {__MODULE__, :transform_relationship, [action]}
                        }
                      end)
 

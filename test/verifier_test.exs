@@ -56,7 +56,7 @@ defmodule AshReferentialActions.VerifierTest do
         end
 
         relationships do
-          opt_nilify_belongs_to :parent, __MODULE__
+          nilify_belongs_to :parent, __MODULE__, allow_nil?: true
           nilify_has_many :children, __MODULE__, destination_attribute: :parent_id
         end
       end
@@ -120,7 +120,7 @@ defmodule AshReferentialActions.VerifierTest do
         end
 
         relationships do
-          opt_nilify_belongs_to :parent, __MODULE__
+          nilify_belongs_to :parent, __MODULE__, allow_nil?: true
           nilify_has_many :children, __MODULE__, destination_attribute: :parent_id
         end
       end
