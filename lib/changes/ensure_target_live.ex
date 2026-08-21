@@ -150,9 +150,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
         :ok
 
       true ->
-        {:error,
-         "cannot use :#{rel.name}: target #{inspect(rel.destination)} " <>
-           "does not exist or is not live"}
+        {:error, ":#{rel.name} 관계의 #{inspect(rel.destination)} 대상을 찾을 수 없거나 이미 보관되었습니다."}
     end
   end
 end

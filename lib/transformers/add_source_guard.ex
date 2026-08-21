@@ -1,6 +1,6 @@
 defmodule AshReferentialActions.Transformers.AddSourceGuard do
   @moduledoc false
-  # Prepends AshReferentialActions.Changes.EnsureTargetLive to every create and update
+  # Appends AshReferentialActions.Changes.EnsureTargetLive to every create and update
   # action of a referring resource, so a guarded foreign key can never be
   # pointed at an archived or missing target.
   use Spark.Dsl.Transformer
@@ -18,7 +18,7 @@ defmodule AshReferentialActions.Transformers.AddSourceGuard do
 
   @impl true
   def transform(dsl_state) do
-    # Nothing to guard without restrict/nilify edges. Skipping keeps the extension
+    # Nothing to guard without cascade/restrict/nilify edges. Skipping keeps the extension
     # free to sit on a base resource module: resources that use nothing
     # are untouched, and in particular stay atomic-capable for bulk updates.
     if Enum.any?(
@@ -40,7 +40,9 @@ defmodule AshReferentialActions.Transformers.AddSourceGuard do
              Transformer.build_entity(Ash.Resource.Dsl, [:actions, action.type], :change,
                change: {AshReferentialActions.Changes.EnsureTargetLive, []}
              ) do
-        new_action = %{action | changes: [guard | action.changes]}
+        # Resource-specific relationship checks should keep their more useful domain
+        # error messages. The generic live-target guard is the final safety net.
+        new_action = %{action | changes: action.changes ++ [guard]}
 
         {:ok,
          Transformer.replace_entity(
