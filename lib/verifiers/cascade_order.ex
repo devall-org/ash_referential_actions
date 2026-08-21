@@ -29,21 +29,26 @@ defmodule AshReferentialActions.Verifiers.CascadeOrder do
   end
 
   defp restrict_edges(dsl_state, archive_related) do
-    subtrees =
+    cascades =
       Map.new(archive_related, fn name ->
-        destinations =
+        cascade =
           case relationship(dsl_state, name) do
-            nil -> MapSet.new()
-            relationship -> cascade_subtree(relationship.destination)
+            nil -> nil
+            relationship -> {relationship.destination, cascade_subtree(relationship.destination)}
           end
 
-        {name, destinations}
+        {name, cascade}
       end)
 
-    for {referrer_name, referrer_resources} <- subtrees,
-        {restricted_name, restricted_resources} <- subtrees,
+    # A direct root's descendants may restrict another direct root. The
+    # referrer side therefore needs its transitive cascade subtree. The target
+    # side intentionally stays at the direct root: the same resource module can
+    # occur in multiple polymorphic subtrees (notably File), and treating all of
+    # those rows as one set creates false cycles.
+    for {referrer_name, {_referrer_root, referrer_resources}} <- cascades,
+        {restricted_name, {restricted_root, _restricted_resources}} <- cascades,
         restricted_name != referrer_name,
-        restricts_any?(referrer_resources, restricted_resources),
+        restricts_any?(referrer_resources, restricted_root),
         uniq: true do
       {referrer_name, restricted_name}
     end
@@ -66,14 +71,14 @@ defmodule AshReferentialActions.Verifiers.CascadeOrder do
     end
   end
 
-  defp restricts_any?(referrer_resources, restricted_resources) do
+  defp restricts_any?(referrer_resources, restricted_resource) do
     Enum.any?(referrer_resources, fn resource ->
       resource
       |> Ash.Resource.Info.relationships()
       |> Enum.any?(fn relationship ->
         match?(%Ash.Resource.Relationships.BelongsTo{}, relationship) and
           AshReferentialActions.Info.restrict?(relationship) and
-          MapSet.member?(restricted_resources, relationship.destination)
+          relationship.destination == restricted_resource
       end)
     end)
   end
