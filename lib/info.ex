@@ -13,7 +13,7 @@ defmodule AshReferentialActions.Info do
 
   @doc "Returns true for forward relationships whose target must be live."
   def guarded?(%Ash.Resource.Relationships.BelongsTo{} = relationship),
-    do: action(relationship) in [:restrict, :nilify]
+    do: action(relationship) in [:cascade, :restrict, :nilify]
 
   def guarded?(_relationship), do: false
 

@@ -24,7 +24,9 @@ defmodule AshReferentialActions.Transformers.AddNilifyActions do
     action_name = AshReferentialActions.Info.nilify_action_name(rel.source_attribute)
 
     if Enum.any?(Transformer.get_entities(dsl_state, [:actions]), &(&1.name == action_name)) do
-      {:ok, dsl_state}
+      {:error,
+       "reserved nilify action #{inspect(action_name)} already exists for " <>
+         "relationship :#{rel.name}"}
     else
       change =
         Transformer.build_entity!(Ash.Resource.Dsl, [:actions, :update], :change,

@@ -103,8 +103,8 @@ defmodule AshReferentialActions do
         &%Spark.Dsl.Patch.AddEntity{section_path: [:relationships], entity: &1}
       ),
     verifiers: [
-      AshReferentialActions.Verifiers.NoPlainRelationships,
-      AshReferentialActions.Verifiers.PairConsistency
+      :"Elixir.AshReferentialActions.Verifiers.NoPlainRelationships",
+      :"Elixir.AshReferentialActions.Verifiers.PairConsistency"
     ]
 
   @doc false

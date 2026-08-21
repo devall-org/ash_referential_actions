@@ -76,4 +76,55 @@ defmodule AshReferentialActions.VerifierTest do
              AshReferentialActions.Test.Resources.CascadeParent
            ) == [:children]
   end
+
+  test "reverse-only lifecycle relationship is rejected" do
+    error =
+      assert_dsl_error %Spark.Error.DslError{} do
+        defmodule ReverseOnly do
+          use Ash.Resource, domain: nil, extensions: [AshReferentialActions]
+
+          attributes do
+            uuid_primary_key :id
+            attribute :parent_id, :uuid
+          end
+
+          relationships do
+            restrict_has_many :children, __MODULE__, destination_attribute: :parent_id
+          end
+        end
+      end
+
+    assert error.message =~ "missing matching forward"
+  end
+
+  test "reserved generated nilify action name cannot be overridden" do
+    assert_raise RuntimeError, ~r/reserved nilify action/, fn ->
+      Code.compile_string("""
+      defmodule AshReferentialActions.VerifierTest.NilifyActionCollision do
+        use Ash.Resource,
+          domain: nil,
+          data_layer: Ash.DataLayer.Ets,
+          extensions: [AshReferentialActions.Archival]
+
+        attributes do
+          uuid_primary_key :id
+        end
+
+        actions do
+          defaults [:read]
+
+          update :__ash_referential_actions_nilify_parent_id__ do
+            public? false
+            accept []
+          end
+        end
+
+        relationships do
+          opt_nilify_belongs_to :parent, __MODULE__
+          nilify_has_many :children, __MODULE__, destination_attribute: :parent_id
+        end
+      end
+      """)
+    end
+  end
 end

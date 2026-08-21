@@ -50,7 +50,7 @@ The archival adapter also installs `AshArchival.Resource` and:
 - generates `archive_related` from `cascade_has_many` and `cascade_has_one`
 - rejects an archive while a live `restrict_has_many/has_one` record exists
 - generates a private nilify update action and clears live `nilify_has_many/has_one` foreign keys
-- rejects new restrict/nilify references to archived targets
+- rejects new cascade/restrict/nilify references to archived targets
 - validates cascade destinations and ordering
 
 When cascade order must be pinned:

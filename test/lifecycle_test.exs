@@ -13,6 +13,15 @@ defmodule AshReferentialActions.LifecycleTest do
     assert Ash.read!(Resources.CascadeChild, authorize?: false) == []
   end
 
+  test "cascade rejects a new child pointing at an archived parent" do
+    parent = create!(Resources.CascadeParent)
+    Ash.destroy!(parent, authorize?: false)
+
+    assert_raise Ash.Error.Invalid, fn ->
+      create!(Resources.CascadeChild, %{parent_id: parent.id})
+    end
+  end
+
   test "restrict blocks target archive while a live referrer exists" do
     target = create!(Resources.RestrictTarget)
     locker = create!(Resources.RestrictLocker, %{target_id: target.id})
