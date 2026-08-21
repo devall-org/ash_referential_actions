@@ -1,7 +1,7 @@
 defmodule AshOwnership.Changes.EnsureTargetLive do
   @moduledoc """
   Runtime guard added to every create and update action of an
-  resource that declares `uses`: writing a `uses` foreign key is rejected
+  resource that declares `locks`: writing a `locks` foreign key is rejected
   unless the target exists and is live.
 
   Without this, a user could be pointed at an already-archived (or, on
@@ -25,7 +25,7 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
   first and the archive's own guard sees this user. Without lock support
   (e.g. ETS) the check stays a plain application-level read.
 
-  The target is looked up via the uses relationship's declared
+  The target is looked up via the locks relationship's declared
   `read_action` (or the used resource's primary read — a verifier rejects a
   filtered primary read as the default), so action-level read filters cannot
   silently hide a live target; archival's global filter still applies, so an
@@ -40,7 +40,7 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
     |> Ash.Changeset.after_action(&check_result_keys/2)
   end
 
-  # Updates that provably cannot touch a uses foreign key stay
+  # Updates that provably cannot touch a locks foreign key stay
   # atomic-compatible. `atomic/3` runs before later changes in the action, so
   # any other change (action-level or global) could still add a foreign key
   # atomic we cannot see yet — returning `{:ok, changeset}` there would skip
@@ -50,12 +50,12 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
   @impl true
   def atomic(changeset, _opts, _context) do
     cond do
-      touches_uses_key?(changeset) ->
-        {:not_atomic, "AshOwnership.Changes.EnsureTargetLive must query the borrowed target"}
+      touches_locks_key?(changeset) ->
+        {:not_atomic, "AshOwnership.Changes.EnsureTargetLive must query the locked target"}
 
       has_other_changes?(changeset) ->
         {:not_atomic,
-         "a later change could set a uses key atomically, " <>
+         "a later change could set a locks key atomically, " <>
            "which AshOwnership.Changes.EnsureTargetLive must verify"}
 
       true ->
@@ -63,9 +63,9 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
     end
   end
 
-  defp touches_uses_key?(changeset) do
+  defp touches_locks_key?(changeset) do
     changeset.resource
-    |> uses_rels()
+    |> locks_rels()
     |> Enum.any?(fn rel ->
       Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) or
         Keyword.has_key?(changeset.atomics, rel.source_attribute)
@@ -89,15 +89,15 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
     end)
   end
 
-  defp uses_rels(resource) do
+  defp locks_rels(resource) do
     resource
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshOwnership.Info.uses?/1)
+    |> Enum.filter(&AshOwnership.Info.locks?/1)
   end
 
   defp check_changing_keys(changeset) do
     changeset.resource
-    |> uses_rels()
+    |> locks_rels()
     |> Enum.reduce(changeset, fn rel, changeset ->
       if Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) do
         case verify_target(
@@ -116,7 +116,7 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
 
   defp check_result_keys(changeset, result) do
     changeset.resource
-    |> uses_rels()
+    |> locks_rels()
     |> Enum.reduce_while({:ok, result}, fn rel, {:ok, result} ->
       value = Map.get(result, rel.source_attribute)
       original = original_value(changeset, rel.source_attribute)

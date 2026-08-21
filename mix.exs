@@ -10,8 +10,7 @@ defmodule AshOwnership.MixProject do
       consolidate_protocols: Mix.env() not in [:dev, :test],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description:
-        "Borrow semantics for Ash: non-owning `borrows` references that can never dangle.",
+      description: "Ownership semantics for Ash relationships and lifecycle locks.",
       package: package(),
       source_url: "https://github.com/devall-org/ash_ownership",
       homepage_url: "https://github.com/devall-org/ash_ownership",

@@ -14,18 +14,18 @@ defmodule AshOwnership.GuardTest do
     resource |> Ash.Changeset.for_create(:create, attrs) |> Ash.create!()
   end
 
-  describe "destroy guard (archival borrowable)" do
-    test "archiving a borrowed snapshot is rejected" do
+  describe "destroy guard (archival lockable)" do
+    test "archiving a locked snapshot is rejected" do
       snapshot = create!(Snapshot)
       _doc = create!(Doc, %{snapshot_id: snapshot.id})
 
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
 
       assert Exception.message(error) =~
-               "still used by AshOwnership.Test.Support.GuardResources.Doc via :docs"
+               "still locked by AshOwnership.Test.Support.GuardResources.Doc via :docs"
     end
 
-    test "archiving succeeds once every borrower is archived" do
+    test "archiving succeeds once every locker is archived" do
       snapshot = create!(Snapshot)
       doc = create!(Doc, %{snapshot_id: snapshot.id})
 
@@ -35,17 +35,17 @@ defmodule AshOwnership.GuardTest do
       assert [] = Ash.read!(Snapshot)
     end
 
-    test "an unborrowed snapshot archives freely" do
+    test "an unlocked snapshot archives freely" do
       snapshot = create!(Snapshot)
 
       assert :ok = Ash.destroy!(snapshot)
     end
   end
 
-  describe "destroy guard (non-archival borrowable, no foreign key)" do
-    test "hard-deleting a borrowed target is rejected even on ETS" do
+  describe "destroy guard (non-archival lockable, no foreign key)" do
+    test "hard-deleting a locked target is rejected even on ETS" do
       target = create!(NaSnapshot)
-      _borrower = create!(NaDoc, %{na_snapshot_id: target.id})
+      _locker = create!(NaDoc, %{na_snapshot_id: target.id})
 
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(target) end
 
@@ -53,18 +53,18 @@ defmodule AshOwnership.GuardTest do
                "NaSnapshot is still in use"
     end
 
-    test "hard delete succeeds once the borrower is gone" do
+    test "hard delete succeeds once the locker is gone" do
       target = create!(NaSnapshot)
-      borrower = create!(NaDoc, %{na_snapshot_id: target.id})
+      locker = create!(NaDoc, %{na_snapshot_id: target.id})
 
-      Ash.destroy!(borrower)
+      Ash.destroy!(locker)
 
       assert :ok = Ash.destroy!(target)
     end
   end
 
-  describe "destroy guard vs borrower read filters" do
-    test "a borrower hidden by its primary read filter still blocks the destroy" do
+  describe "destroy guard vs locker read filters" do
+    test "a locker hidden by its primary read filter still blocks the destroy" do
       snapshot = create!(FilteredSnapshot)
       _hidden_doc = create!(FilteredDoc, %{filtered_snapshot_id: snapshot.id, active: false})
 
@@ -73,12 +73,12 @@ defmodule AshOwnership.GuardTest do
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
 
       assert Exception.message(error) =~
-               "still used by AshOwnership.Test.Support.GuardResources.FilteredDoc via :filtered_docs"
+               "still locked by AshOwnership.Test.Support.GuardResources.FilteredDoc via :filtered_docs"
     end
   end
 
-  describe "target-live guard on the borrower side" do
-    test "borrowing an archived target is rejected at create" do
+  describe "target-live guard on the locker side" do
+    test "locking an archived target is rejected at create" do
       snapshot = create!(Snapshot)
       Ash.destroy!(snapshot)
 
@@ -90,7 +90,7 @@ defmodule AshOwnership.GuardTest do
       assert Exception.message(error) =~ "does not exist or is not live"
     end
 
-    test "borrowing a missing target is rejected at create" do
+    test "locking a missing target is rejected at create" do
       error =
         assert_raise Ash.Error.Invalid, fn ->
           create!(Doc, %{snapshot_id: Ash.UUID.generate()})
@@ -116,7 +116,7 @@ defmodule AshOwnership.GuardTest do
       assert Exception.message(error) =~ "does not exist or is not live"
     end
 
-    test "borrowing a live target succeeds and a nil foreign key is ignored" do
+    test "locking a live target succeeds and a nil foreign key is ignored" do
       snapshot = create!(Snapshot)
 
       assert %Doc{} = create!(Doc, %{snapshot_id: snapshot.id})
@@ -194,7 +194,7 @@ defmodule AshOwnership.GuardTest do
   describe "destroy guard vs global preparations" do
     alias AshOwnership.Test.Support.GuardResources.{PrepDoc, PrepSnapshot}
 
-    test "a borrower hidden by a flag-aware global preparation still blocks the destroy" do
+    test "a locker hidden by a flag-aware global preparation still blocks the destroy" do
       snapshot = create!(PrepSnapshot)
       _hidden = create!(PrepDoc, %{prep_snapshot_id: snapshot.id, active: false})
 
@@ -203,10 +203,10 @@ defmodule AshOwnership.GuardTest do
       error = assert_raise Ash.Error.Invalid, fn -> Ash.destroy!(snapshot) end
 
       assert Exception.message(error) =~
-               "still used by AshOwnership.Test.Support.GuardResources.PrepDoc via :prep_docs"
+               "still locked by AshOwnership.Test.Support.GuardResources.PrepDoc via :prep_docs"
     end
 
-    test "a live target hidden from default reads can still be borrowed" do
+    test "a live target hidden from default reads can still be locked" do
       snapshot = create!(PrepSnapshot, %{active: false})
 
       assert [] = Ash.read!(PrepSnapshot)
@@ -215,7 +215,7 @@ defmodule AshOwnership.GuardTest do
   end
 
   describe "extension composition" do
-    test "a resource using both Borrower and Borrowable compiles without extra actions" do
+    test "a resource using both Locker and Lockable compiles without extra actions" do
       defmodule MiddleLink do
         @moduledoc false
         use Ash.Resource,
@@ -235,7 +235,7 @@ defmodule AshOwnership.GuardTest do
                Ash.Resource.Info.actions(MiddleLink) |> Enum.filter(&(&1.type == :read))
     end
 
-    test "a resource with no borrow edges gets no guard changes" do
+    test "a resource with no lock edges gets no guard changes" do
       defmodule Untouched do
         @moduledoc false
         use Ash.Resource,
@@ -257,7 +257,10 @@ defmodule AshOwnership.GuardTest do
         |> Enum.flat_map(fn action -> Map.get(action, :changes, []) end)
         |> Enum.filter(fn
           %Ash.Resource.Change{change: {module, _}} ->
-            module in [AshOwnership.Changes.EnsureTargetLive, AshOwnership.Changes.EnsureNotUsed]
+            module in [
+              AshOwnership.Changes.EnsureTargetLive,
+              AshOwnership.Changes.EnsureNotLocked
+            ]
 
           _ ->
             false

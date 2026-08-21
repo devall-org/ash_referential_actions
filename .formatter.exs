@@ -1,16 +1,16 @@
 spark_locals_without_parens = [
-  opt_priv_uses: 2,
-  opt_priv_uses: 3,
-  opt_uses: 2,
-  opt_uses: 3,
-  req_priv_uses: 2,
-  req_priv_uses: 3,
-  req_uses: 2,
-  req_uses: 3,
-  used_by: 2,
-  used_by: 3,
-  uses: 2,
-  uses: 3
+  opt_priv_locks: 2,
+  opt_priv_locks: 3,
+  opt_locks: 2,
+  opt_locks: 3,
+  req_priv_locks: 2,
+  req_priv_locks: 3,
+  req_locks: 2,
+  req_locks: 3,
+  locked_by: 2,
+  locked_by: 3,
+  locks: 2,
+  locks: 3
 ]
 
 [

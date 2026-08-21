@@ -1,22 +1,22 @@
-defmodule AshOwnership.Verifiers.UsedByConsistency do
+defmodule AshOwnership.Verifiers.LockedByConsistency do
   @moduledoc false
-  # Cross-checks between this resource's `uses` edges and the reverse
+  # Cross-checks between this resource's `locks` edges and the reverse
   # declarations on their destinations.
   #
   # All cross-module checks live on the using side so that compile-time
   # module dependencies flow in one direction only (user -> used),
   # mirroring how AshCascadeArchival verifies parents from the child side.
-  # A `used_by` that points at a module which never uses anything is
+  # A `locked_by` that points at a module which never locks anything is
   # therefore not detectable; this is documented as a limitation.
   #
-  # For each `uses` edge to destination D:
+  # For each `locks` edge to destination D:
   #
-  #   a. Every `used_by` on D that points at this resource must match one
-  #      of this resource's `uses` edges on BOTH key attributes (no lying
+  #   a. Every `locked_by` on D that points at this resource must match one
+  #      of this resource's `locks` edges on BOTH key attributes (no lying
   #      or mis-wired reverse declarations).
-  #   b. A plain `has_many` on D that traverses a uses foreign key of this
-  #      resource must be declared with `used_by` instead.
-  #   c. D must declare a matching `used_by` back to this resource, so
+  #   b. A plain `has_many` on D that traverses a locks foreign key of this
+  #      resource must be declared with `locked_by` instead.
+  #   c. D must declare a matching `locked_by` back to this resource, so
   #      the destroy guard can enumerate its users — on any data layer,
   #      archival or not.
   #   d. The read actions the guards will query through must be usable: an
@@ -33,13 +33,13 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
   def verify(dsl_state) do
     module = Verifier.get_persisted(dsl_state, :module)
 
-    uses_rels =
+    locks_rels =
       dsl_state
       |> Ash.Resource.Info.relationships()
-      |> Enum.filter(&AshOwnership.Info.uses?/1)
+      |> Enum.filter(&AshOwnership.Info.locks?/1)
       |> Enum.filter(&AshOwnership.Info.enabled?(&1.destination))
 
-    uses_rels
+    locks_rels
     |> Enum.group_by(& &1.destination)
     |> Enum.reduce_while(:ok, fn {destination, rels}, :ok ->
       case verify_destination(dsl_state, module, destination, rels) do
@@ -49,38 +49,38 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
     end)
   end
 
-  defp verify_destination(dsl_state, module, destination, uses_rels) do
+  defp verify_destination(dsl_state, module, destination, locks_rels) do
     destination_rels = Ash.Resource.Info.relationships(destination)
 
     reverse_rels =
       Enum.filter(destination_rels, fn rel ->
-        AshOwnership.Info.used_by?(rel) and rel.destination == module
+        AshOwnership.Info.locked_by?(rel) and rel.destination == module
       end)
 
-    with :ok <- verify_reverse_authenticity(module, destination, uses_rels, reverse_rels),
+    with :ok <- verify_reverse_authenticity(module, destination, locks_rels, reverse_rels),
          :ok <-
            verify_plain_has_many(
              module,
              destination,
-             uses_rels,
+             locks_rels,
              destination_rels,
              reverse_rels
            ),
-         :ok <- verify_has_reverse(module, destination, uses_rels, reverse_rels) do
-      verify_guard_channels(dsl_state, module, destination, uses_rels, reverse_rels)
+         :ok <- verify_has_reverse(module, destination, locks_rels, reverse_rels) do
+      verify_guard_channels(dsl_state, module, destination, locks_rels, reverse_rels)
     end
   end
 
-  # The target-live guard queries D through the uses edge; the destroy
-  # guard queries this resource through D's used_by. Both channels'
+  # The target-live guard queries D through the locks edge; the destroy
+  # guard queries this resource through D's locked_by. Both channels'
   # effective read actions are checked here, on the using side, keeping
   # compile-time dependencies one-directional.
-  defp verify_guard_channels(dsl_state, module, destination, uses_rels, reverse_rels) do
-    Enum.reduce_while(uses_rels, :ok, fn uses_rel, :ok ->
-      matching = Enum.filter(reverse_rels, &matching_pair?(&1, uses_rel))
+  defp verify_guard_channels(dsl_state, module, destination, locks_rels, reverse_rels) do
+    Enum.reduce_while(locks_rels, :ok, fn locks_rel, :ok ->
+      matching = Enum.filter(reverse_rels, &matching_pair?(&1, locks_rel))
 
-      with :ok <- verify_channel(module, uses_rel, destination, destination, uses_rel.name),
-           :ok <- verify_reverse_channels(module, matching, dsl_state, uses_rel) do
+      with :ok <- verify_channel(module, locks_rel, destination, destination, locks_rel.name),
+           :ok <- verify_reverse_channels(module, matching, dsl_state, locks_rel) do
         {:cont, :ok}
       else
         {:error, error} -> {:halt, {:error, error}}
@@ -88,12 +88,12 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
     end)
   end
 
-  # The destroy guard queries every `used_by` and blocks if any reports a
+  # The destroy guard queries every `locked_by` and blocks if any reports a
   # user, so several reverse declarations over one foreign key are an OR.
   # Each must resolve to a real read action (an unresolvable one crashes the
   # guard), and at least one must be unfiltered — a union of filtered views is
   # not a proof that no user is left.
-  defp verify_reverse_channels(module, reverse_rels, dsl_state, uses_rel) do
+  defp verify_reverse_channels(module, reverse_rels, dsl_state, locks_rel) do
     resolved =
       Enum.map(reverse_rels, fn rel -> {rel, resolve_channel_action(rel, dsl_state, module)} end)
 
@@ -111,23 +111,23 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
 
     cond do
       unresolved ->
-        {:error, channel_error(module, uses_rel.name, unresolved)}
+        {:error, channel_error(module, locks_rel.name, unresolved)}
 
       clean? ->
         :ok
 
       true ->
         {:error,
-         channel_error(module, uses_rel.name, """
-         Every `used_by` on #{inspect(uses_rel.destination)} matching \
-         `uses :#{uses_rel.name}` reads #{inspect(module)} through a read action that \
+         channel_error(module, locks_rel.name, """
+         Every `locked_by` on #{inspect(locks_rel.destination)} matching \
+         `locks :#{locks_rel.name}` reads #{inspect(module)} through a read action that \
          carries filters, preparations, or required arguments: \
          #{Enum.map_join(resolved, ", ", fn {rel, {:ok, action}} -> "#{rel_label(rel)} -> :#{action.name}" end)}.
 
          The destroy guard ORs these channels together, so a union of filtered views can \
          miss a live user. Add one unfiltered channel:
 
-           used_by :all_#{suggest_name(module)}, #{inspect(module)}
+           locked_by :all_#{suggest_name(module)}, #{inspect(module)}
 
          Note that other extensions may assign `read_action` for you — check whether one \
          did, and opt that relationship out of it if so.
@@ -136,7 +136,7 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
   end
 
   # `queried` is what the guard will read through `rel`: the destination
-  # module for the uses edge, this resource's dsl_state for the reverse.
+  # module for the locks edge, this resource's dsl_state for the reverse.
   defp verify_channel(module, rel, queried, queried_name, path_name) do
     case resolve_channel_action(rel, queried, queried_name) do
       {:ok, action} ->
@@ -199,7 +199,7 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
   end
 
   defp rel_label(rel) do
-    kind = if AshOwnership.Info.uses?(rel), do: "borrows", else: "used_by"
+    kind = if AshOwnership.Info.locks?(rel), do: "locks", else: "locked_by"
     "#{kind} :#{rel.name}"
   end
 
@@ -211,13 +211,13 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
     )
   end
 
-  defp matching_pair?(reverse_rel, uses_rel),
-    do: AshOwnership.Info.reverse_of?(reverse_rel, uses_rel)
+  defp matching_pair?(reverse_rel, locks_rel),
+    do: AshOwnership.Info.reverse_of?(reverse_rel, locks_rel)
 
-  defp verify_reverse_authenticity(module, destination, uses_rels, reverse_rels) do
+  defp verify_reverse_authenticity(module, destination, locks_rels, reverse_rels) do
     reverse_rels
     |> Enum.find(fn reverse_rel ->
-      not Enum.any?(uses_rels, &matching_pair?(reverse_rel, &1))
+      not Enum.any?(locks_rels, &matching_pair?(reverse_rel, &1))
     end)
     |> case do
       nil ->
@@ -229,58 +229,58 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
            module: module,
            path: [:relationships],
            message: """
-           #{inspect(destination)} declares `used_by :#{reverse_rel.name}` pointing at \
+           #{inspect(destination)} declares `locked_by :#{reverse_rel.name}` pointing at \
            #{inspect(module)} via #{inspect(reverse_rel.source_attribute)} -> \
            #{inspect(reverse_rel.destination_attribute)}, but #{inspect(module)} has no \
-           matching `uses` relationship on that attribute pair.
+           matching `locks` relationship on that attribute pair.
            """
          )}
     end
   end
 
-  defp verify_has_reverse(module, destination, uses_rels, reverse_rels) do
-    uses_rels
-    |> Enum.find(fn uses_rel ->
-      not Enum.any?(reverse_rels, &matching_pair?(&1, uses_rel))
+  defp verify_has_reverse(module, destination, locks_rels, reverse_rels) do
+    locks_rels
+    |> Enum.find(fn locks_rel ->
+      not Enum.any?(reverse_rels, &matching_pair?(&1, locks_rel))
     end)
     |> case do
       nil ->
         :ok
 
-      uses_rel ->
+      locks_rel ->
         {:error,
          Spark.Error.DslError.exception(
            module: module,
-           path: [:relationships, uses_rel.name],
+           path: [:relationships, locks_rel.name],
            message: """
-           #{inspect(destination)} has the AshOwnership extension, but declares no `used_by` matching \
-           `uses :#{uses_rel.name}`.
+           #{inspect(destination)} has the AshOwnership extension, but declares no `locked_by` matching \
+           `locks :#{locks_rel.name}`.
 
            The destroy guard on #{inspect(destination)} must be able to enumerate every \
            user. Add to #{inspect(destination)}:
 
-             used_by :#{suggest_name(module)}, #{inspect(module)}
+             locked_by :#{suggest_name(module)}, #{inspect(module)}
            """
          )}
     end
   end
 
-  # A plain `has_many` over a uses foreign key is only a problem when it is
+  # A plain `has_many` over a locks foreign key is only a problem when it is
   # the *only* reverse declaration: the guard would then have no channel. Once
-  # a matching `used_by` exists, further plain views over the same key are
+  # a matching `locked_by` exists, further plain views over the same key are
   # ordinary derived relationships (filtered lists and the like) and are left
-  # alone — `used_by` deliberately accepts no `filter`, so they could not
+  # alone — `locked_by` deliberately accepts no `filter`, so they could not
   # be expressed as one anyway.
-  defp verify_plain_has_many(module, destination, uses_rels, destination_rels, reverse_rels) do
+  defp verify_plain_has_many(module, destination, locks_rels, destination_rels, reverse_rels) do
     unguarded =
-      Enum.reject(uses_rels, fn uses_rel ->
-        Enum.any?(reverse_rels, &matching_pair?(&1, uses_rel))
+      Enum.reject(locks_rels, fn locks_rel ->
+        Enum.any?(reverse_rels, &matching_pair?(&1, locks_rel))
       end)
 
     destination_rels
     |> Enum.find(fn
       %HasMany{} = rel ->
-        not AshOwnership.Info.used_by?(rel) and rel.destination == module and
+        not AshOwnership.Info.locked_by?(rel) and rel.destination == module and
           Enum.any?(unguarded, &matching_pair?(rel, &1))
 
       %{} ->
@@ -296,12 +296,12 @@ defmodule AshOwnership.Verifiers.UsedByConsistency do
            module: module,
            path: [:relationships],
            message: """
-           #{inspect(destination)} declares `has_many :#{rel.name}` traversing the uses \
+           #{inspect(destination)} declares `has_many :#{rel.name}` traversing the locks \
            foreign key #{inspect(rel.destination_attribute)} of #{inspect(module)}.
 
-           The reverse side of a uses edge must be declared with `used_by`:
+           The reverse side of a locks edge must be declared with `locked_by`:
 
-             used_by :#{rel.name}, #{inspect(module)}
+             locked_by :#{rel.name}, #{inspect(module)}
            """
          )}
     end

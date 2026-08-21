@@ -3,8 +3,8 @@ defmodule AshOwnership.VerifierTest do
 
   import Spark.Test
 
-  describe "UsesTargetEnabled" do
-    test "uses targeting a resource without the extension is rejected" do
+  describe "LocksTargetEnabled" do
+    test "locks targeting a resource without the extension is rejected" do
       defmodule PlainTarget do
         @moduledoc false
         use Ash.Resource, domain: nil
@@ -16,7 +16,7 @@ defmodule AshOwnership.VerifierTest do
 
       error =
         assert_dsl_error %Spark.Error.DslError{} do
-          defmodule UsesPlainTarget do
+          defmodule LocksPlainTarget do
             @moduledoc false
             use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -25,7 +25,7 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses(:plain_target, AshOwnership.VerifierTest.PlainTarget)
+              locks(:plain_target, AshOwnership.VerifierTest.PlainTarget)
             end
           end
         end
@@ -34,7 +34,7 @@ defmodule AshOwnership.VerifierTest do
     end
   end
 
-  describe "RequiresUses" do
+  describe "RequiresLocks" do
     test "plain belongs_to to an AshOwnership resource is rejected" do
       defmodule Enabled1 do
         @moduledoc false
@@ -164,7 +164,7 @@ defmodule AshOwnership.VerifierTest do
         end
 
         relationships do
-          used_by :channel_docs, AshOwnership.VerifierTest.FilteredPrimaryDoc do
+          locked_by :channel_docs, AshOwnership.VerifierTest.FilteredPrimaryDoc do
             destination_attribute :channel_snapshot_id
           end
         end
@@ -189,7 +189,7 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses :channel_snapshot, AshOwnership.VerifierTest.ChannelSnapshot
+              locks :channel_snapshot, AshOwnership.VerifierTest.ChannelSnapshot
             end
           end
         end
@@ -197,7 +197,7 @@ defmodule AshOwnership.VerifierTest do
       assert error.message =~ "a union of filtered views can miss a live user"
     end
 
-    test "one unfiltered used_by is enough alongside filtered views" do
+    test "one unfiltered locked_by is enough alongside filtered views" do
       refute_dsl_errors do
         defmodule MixedChannelSnapshot do
           @moduledoc false
@@ -212,12 +212,12 @@ defmodule AshOwnership.VerifierTest do
           end
 
           relationships do
-            used_by :active_mixed_docs, AshOwnership.VerifierTest.MixedChannelDoc do
+            locked_by :active_mixed_docs, AshOwnership.VerifierTest.MixedChannelDoc do
               destination_attribute :mixed_channel_snapshot_id
               read_action :list_active
             end
 
-            used_by :all_mixed_docs, AshOwnership.VerifierTest.MixedChannelDoc do
+            locked_by :all_mixed_docs, AshOwnership.VerifierTest.MixedChannelDoc do
               destination_attribute :mixed_channel_snapshot_id
             end
           end
@@ -241,13 +241,13 @@ defmodule AshOwnership.VerifierTest do
           end
 
           relationships do
-            uses :mixed_channel_snapshot, AshOwnership.VerifierTest.MixedChannelSnapshot
+            locks :mixed_channel_snapshot, AshOwnership.VerifierTest.MixedChannelSnapshot
           end
         end
       end
     end
 
-    test "only filtered used_by channels are rejected" do
+    test "only filtered locked_by channels are rejected" do
       defmodule FilteredOnlySnapshot do
         @moduledoc false
         use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -261,7 +261,7 @@ defmodule AshOwnership.VerifierTest do
         end
 
         relationships do
-          used_by :active_filtered_docs, AshOwnership.VerifierTest.FilteredOnlyDoc do
+          locked_by :active_filtered_docs, AshOwnership.VerifierTest.FilteredOnlyDoc do
             destination_attribute :filtered_only_snapshot_id
             read_action :list_active
           end
@@ -288,7 +288,7 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses :filtered_only_snapshot, AshOwnership.VerifierTest.FilteredOnlySnapshot
+              locks :filtered_only_snapshot, AshOwnership.VerifierTest.FilteredOnlySnapshot
             end
           end
         end
@@ -310,7 +310,7 @@ defmodule AshOwnership.VerifierTest do
         end
 
         relationships do
-          used_by :missing_action_docs, AshOwnership.VerifierTest.MissingActionDoc do
+          locked_by :missing_action_docs, AshOwnership.VerifierTest.MissingActionDoc do
             destination_attribute :missing_action_snapshot_id
             read_action :nonexistent_read
           end
@@ -332,7 +332,7 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses :missing_action_snapshot, AshOwnership.VerifierTest.MissingActionSnapshot
+              locks :missing_action_snapshot, AshOwnership.VerifierTest.MissingActionSnapshot
             end
           end
         end
@@ -341,8 +341,8 @@ defmodule AshOwnership.VerifierTest do
     end
   end
 
-  describe "UsedByConsistency" do
-    test "uses to an archival target without matching used_by is rejected" do
+  describe "LockedByConsistency" do
+    test "locks to an archival target without matching locked_by is rejected" do
       defmodule ArchivalNoReverse do
         @moduledoc false
         use Ash.Resource,
@@ -356,7 +356,7 @@ defmodule AshOwnership.VerifierTest do
 
       error =
         assert_dsl_error %Spark.Error.DslError{} do
-          defmodule UsesArchivalNoReverse do
+          defmodule LocksArchivalNoReverse do
             @moduledoc false
             use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -365,15 +365,15 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses(:archival_no_reverse, AshOwnership.VerifierTest.ArchivalNoReverse)
+              locks(:archival_no_reverse, AshOwnership.VerifierTest.ArchivalNoReverse)
             end
           end
         end
 
-      assert error.message =~ "declares no `used_by`"
+      assert error.message =~ "declares no `locked_by`"
     end
 
-    test "uses to a non-archival target without matching used_by is rejected" do
+    test "locks to a non-archival target without matching locked_by is rejected" do
       defmodule NonArchivalNoReverse do
         @moduledoc false
         use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -385,7 +385,7 @@ defmodule AshOwnership.VerifierTest do
 
       error =
         assert_dsl_error %Spark.Error.DslError{} do
-          defmodule UsesNonArchivalNoReverse do
+          defmodule LocksNonArchivalNoReverse do
             @moduledoc false
             use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -394,15 +394,15 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses(:non_archival_no_reverse, AshOwnership.VerifierTest.NonArchivalNoReverse)
+              locks(:non_archival_no_reverse, AshOwnership.VerifierTest.NonArchivalNoReverse)
             end
           end
         end
 
-      assert error.message =~ "declares no `used_by`"
+      assert error.message =~ "declares no `locked_by`"
     end
 
-    test "used_by whose source_attribute matches no uses is rejected" do
+    test "locked_by whose source_attribute matches no locks is rejected" do
       defmodule MisWiredReverse do
         @moduledoc false
         use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -413,7 +413,7 @@ defmodule AshOwnership.VerifierTest do
         end
 
         relationships do
-          used_by :mis_wired, AshOwnership.VerifierTest.UsesMisWiredReverse do
+          locked_by :mis_wired, AshOwnership.VerifierTest.LocksMisWiredReverse do
             source_attribute(:alt_id)
             destination_attribute(:mis_wired_reverse_id)
           end
@@ -422,7 +422,7 @@ defmodule AshOwnership.VerifierTest do
 
       error =
         assert_dsl_error %Spark.Error.DslError{} do
-          defmodule UsesMisWiredReverse do
+          defmodule LocksMisWiredReverse do
             @moduledoc false
             use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -431,15 +431,15 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses(:mis_wired_reverse, AshOwnership.VerifierTest.MisWiredReverse)
+              locks(:mis_wired_reverse, AshOwnership.VerifierTest.MisWiredReverse)
             end
           end
         end
 
-      assert error.message =~ "matching `uses`"
+      assert error.message =~ "matching `locks`"
     end
 
-    test "used_by whose destination_attribute matches no uses is rejected" do
+    test "locked_by whose destination_attribute matches no locks is rejected" do
       defmodule LyingReverse do
         @moduledoc false
         use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -449,7 +449,7 @@ defmodule AshOwnership.VerifierTest do
         end
 
         relationships do
-          used_by :liars, AshOwnership.VerifierTest.UsesLyingReverse do
+          locked_by :liars, AshOwnership.VerifierTest.LocksLyingReverse do
             destination_attribute(:unrelated_id)
           end
         end
@@ -457,7 +457,7 @@ defmodule AshOwnership.VerifierTest do
 
       error =
         assert_dsl_error %Spark.Error.DslError{} do
-          defmodule UsesLyingReverse do
+          defmodule LocksLyingReverse do
             @moduledoc false
             use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -466,15 +466,15 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses(:lying_reverse, AshOwnership.VerifierTest.LyingReverse)
+              locks(:lying_reverse, AshOwnership.VerifierTest.LyingReverse)
             end
           end
         end
 
-      assert error.message =~ "no matching `uses`"
+      assert error.message =~ "no matching `locks`"
     end
 
-    test "plain has_many traversing a uses foreign key is rejected" do
+    test "plain has_many traversing a locks foreign key is rejected" do
       defmodule PlainHasManyReverse do
         @moduledoc false
         use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -484,7 +484,7 @@ defmodule AshOwnership.VerifierTest do
         end
 
         relationships do
-          has_many :borrowers, AshOwnership.VerifierTest.UsesPlainHasManyReverse do
+          has_many :lockers, AshOwnership.VerifierTest.LocksPlainHasManyReverse do
             destination_attribute(:plain_has_many_reverse_id)
           end
         end
@@ -492,7 +492,7 @@ defmodule AshOwnership.VerifierTest do
 
       error =
         assert_dsl_error %Spark.Error.DslError{} do
-          defmodule UsesPlainHasManyReverse do
+          defmodule LocksPlainHasManyReverse do
             @moduledoc false
             use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -501,15 +501,15 @@ defmodule AshOwnership.VerifierTest do
             end
 
             relationships do
-              uses(:plain_has_many_reverse, AshOwnership.VerifierTest.PlainHasManyReverse)
+              locks(:plain_has_many_reverse, AshOwnership.VerifierTest.PlainHasManyReverse)
             end
           end
         end
 
-      assert error.message =~ "must be declared with `used_by`"
+      assert error.message =~ "must be declared with `locked_by`"
     end
 
-    test "a matched uses / used_by pair compiles cleanly" do
+    test "a matched locks / locked_by pair compiles cleanly" do
       refute_dsl_errors do
         defmodule CleanSnapshot do
           @moduledoc false
@@ -526,7 +526,7 @@ defmodule AshOwnership.VerifierTest do
           end
 
           relationships do
-            used_by :clean_docs, AshOwnership.VerifierTest.CleanDoc do
+            locked_by :clean_docs, AshOwnership.VerifierTest.CleanDoc do
               destination_attribute(:clean_snapshot_id)
             end
           end
@@ -545,7 +545,7 @@ defmodule AshOwnership.VerifierTest do
           end
 
           relationships do
-            uses(:clean_snapshot, AshOwnership.VerifierTest.CleanSnapshot)
+            locks(:clean_snapshot, AshOwnership.VerifierTest.CleanSnapshot)
           end
         end
       end

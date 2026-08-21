@@ -16,7 +16,7 @@ defmodule AshOwnership.Test.Support.TestResources do
     end
 
     relationships do
-      used_by(:docs, TestResources.Doc)
+      locked_by(:docs, TestResources.Doc)
     end
   end
 
@@ -33,7 +33,7 @@ defmodule AshOwnership.Test.Support.TestResources do
     end
 
     relationships do
-      uses(:snapshot, TestResources.Snapshot)
+      locks(:snapshot, TestResources.Snapshot)
     end
   end
 end

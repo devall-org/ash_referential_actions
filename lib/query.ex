@@ -3,9 +3,9 @@ defmodule AshOwnership.Query do
   # Shared query plumbing for the runtime guards.
 
   @doc false
-  # The read action a guard uses to query through `rel`: the relationship's
+  # The read action a guard locks to query through `rel`: the relationship's
   # `read_action` if set, otherwise the destination's primary read.
-  # `AshOwnership.Verifiers.UsedByConsistency` guarantees at compile time
+  # `AshOwnership.Verifiers.LockedByConsistency` guarantees at compile time
   # that whichever action this resolves to carries no action-level
   # filters/preparations, so it cannot hide physically live rows.
   def guard_read_action(rel) do
@@ -26,7 +26,7 @@ defmodule AshOwnership.Query do
   end
 
   @doc false
-  # Existence check through `rel` (a `uses` or `used_by` relationship),
+  # Existence check through `rel` (a `locks` or `locked_by` relationship),
   # filtered by `filter` (keyword statement).
   #
   # `authorize?: false` bypasses policies (a policy must not be able to hide

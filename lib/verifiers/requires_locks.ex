@@ -1,12 +1,12 @@
-defmodule AshOwnership.Verifiers.RequiresUses do
+defmodule AshOwnership.Verifiers.RequiresLocks do
   @moduledoc false
   # A plain `belongs_to` to a resource with the AshOwnership extension is only allowed
-  # when it is containment — that is, when the used resource declares the reverse
-  # `has_many`/`has_one` back to this resource. A used resource may well own
+  # when it is containment — that is, when the locked resource declares the reverse
+  # `has_many`/`has_one` back to this resource. A locked resource may well own
   # children of its own; those children go down with it and need no guard.
   #
   # Without that reverse declaration the relationship is a non-owning
-  # reference, which must be declared with `uses` so the guards can see it.
+  # reference, which must be declared with `locks` so the guards can see it.
   use Spark.Dsl.Verifier
 
   alias Ash.Resource.Relationships.{BelongsTo, HasMany, HasOne}
@@ -20,7 +20,7 @@ defmodule AshOwnership.Verifiers.RequiresUses do
     |> Ash.Resource.Info.relationships()
     |> Enum.filter(fn
       %BelongsTo{} = rel ->
-        not AshOwnership.Info.uses?(rel) and not AshOwnership.Info.ancestor?(rel) and
+        not AshOwnership.Info.locks?(rel) and not AshOwnership.Info.refers?(rel) and
           AshOwnership.Info.enabled?(rel.destination)
 
       %{} ->
@@ -41,32 +41,32 @@ defmodule AshOwnership.Verifiers.RequiresUses do
            AshOwnership extension, but #{inspect(rel.destination)} declares no relationship \
            back to #{inspect(module)}.
 
-           If this is a non-owning reference, declare it with `uses` so the guards \
+           If this is a non-owning reference, declare it with `locks` so the guards \
            can see it:
 
-             uses :#{rel.name}, #{inspect(rel.destination)}
+             locks :#{rel.name}, #{inspect(rel.destination)}
 
            If #{inspect(module)} is instead owned by #{inspect(rel.destination)}, \
            declare the containment on #{inspect(rel.destination)} with a plain \
            `has_many`/`has_one` back to #{inspect(module)}.
 
-           If this only carries an ancestor's id and the real parent is another \
-           relationship, declare it with `ancestor`:
+           If this only carries a referenced resource's id and the real parent is another \
+           relationship, declare it with `refers`:
 
-             ancestor :#{rel.name}, #{inspect(rel.destination)}
+             refers :#{rel.name}, #{inspect(rel.destination)}
            """
          )}
     end
   end
 
-  # Containment is declared by the owner: a plain (non-used_by) reverse
+  # Containment is declared by the owner: a plain (non-locked_by) reverse
   # relationship on the destination, matching both key attributes.
   defp contained?(belongs_to, module) do
     belongs_to.destination
     |> Ash.Resource.Info.relationships()
     |> Enum.any?(fn
       %kind{} = rel when kind in [HasMany, HasOne] ->
-        not AshOwnership.Info.used_by?(rel) and rel.destination == module and
+        not AshOwnership.Info.locked_by?(rel) and rel.destination == module and
           AshOwnership.Info.reverse_of?(rel, belongs_to)
 
       %{} ->

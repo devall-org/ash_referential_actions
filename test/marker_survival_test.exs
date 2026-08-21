@@ -3,15 +3,15 @@ defmodule AshOwnership.MarkerSurvivalTest do
 
   alias AshOwnership.Test.Support.TestResources
 
-  test "uses compiles to a BelongsTo that keeps the :__uses__ marker" do
+  test "locks compiles to a BelongsTo that keeps the :__locks__ marker" do
     rel = Ash.Resource.Info.relationship(TestResources.Doc, :snapshot)
 
     assert %Ash.Resource.Relationships.BelongsTo{} = rel
-    assert Map.get(rel, :__uses__) == true
+    assert Map.get(rel, :__locks__) == true
     assert rel.destination == TestResources.Snapshot
   end
 
-  test "uses passes belongs_to options through" do
+  test "locks passes belongs_to options through" do
     defmodule RequiredSnapshot do
       @moduledoc false
       use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -25,13 +25,13 @@ defmodule AshOwnership.MarkerSurvivalTest do
       end
 
       relationships do
-        used_by :required_borrow_docs, AshOwnership.MarkerSurvivalTest.RequiredBorrowDoc do
+        locked_by :required_locking_docs, AshOwnership.MarkerSurvivalTest.RequiredLockingDoc do
           destination_attribute :snapshot_id
         end
       end
     end
 
-    defmodule RequiredBorrowDoc do
+    defmodule RequiredLockingDoc do
       @moduledoc false
       use Ash.Resource, domain: nil, extensions: [AshOwnership]
 
@@ -44,16 +44,16 @@ defmodule AshOwnership.MarkerSurvivalTest do
       end
 
       relationships do
-        uses :snapshot, AshOwnership.MarkerSurvivalTest.RequiredSnapshot do
+        locks :snapshot, AshOwnership.MarkerSurvivalTest.RequiredSnapshot do
           allow_nil? false
           public? true
         end
       end
     end
 
-    rel = Ash.Resource.Info.relationship(RequiredBorrowDoc, :snapshot)
+    rel = Ash.Resource.Info.relationship(RequiredLockingDoc, :snapshot)
 
-    assert Map.get(rel, :__uses__) == true
+    assert Map.get(rel, :__locks__) == true
     assert rel.allow_nil? == false
     assert rel.public? == true
   end
@@ -73,7 +73,7 @@ defmodule AshOwnership.MarkerSurvivalTest do
 
       relationships do
         for name <- [:req_docs, :req_priv_docs, :opt_docs, :opt_priv_docs] do
-          used_by name, AshOwnership.MarkerSurvivalTest.VariantDoc do
+          locked_by name, AshOwnership.MarkerSurvivalTest.VariantDoc do
             destination_attribute :"#{name}_snapshot_id"
           end
         end
@@ -93,10 +93,10 @@ defmodule AshOwnership.MarkerSurvivalTest do
       end
 
       relationships do
-        req_uses :req_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
-        req_priv_uses :req_priv_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
-        opt_uses :opt_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
-        opt_priv_uses :opt_priv_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
+        req_locks :req_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
+        req_priv_locks :req_priv_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
+        opt_locks :opt_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
+        opt_priv_locks :opt_priv_docs_snapshot, AshOwnership.MarkerSurvivalTest.VariantSnapshot
       end
     end
 
@@ -110,7 +110,7 @@ defmodule AshOwnership.MarkerSurvivalTest do
     for {name, {allow_nil?, public?}} <- expected do
       rel = Ash.Resource.Info.relationship(VariantDoc, name)
 
-      assert AshOwnership.Info.uses?(rel)
+      assert AshOwnership.Info.locks?(rel)
       assert rel.allow_nil? == allow_nil?, "#{name} allow_nil?"
       assert rel.public? == public?, "#{name} public?"
       # public? drives attribute_public? unless set explicitly
@@ -118,11 +118,11 @@ defmodule AshOwnership.MarkerSurvivalTest do
     end
   end
 
-  test "used_by compiles to a HasMany that keeps the :__used_by__ marker" do
+  test "locked_by compiles to a HasMany that keeps the :__locked_by__ marker" do
     rel = Ash.Resource.Info.relationship(TestResources.Snapshot, :docs)
 
     assert %Ash.Resource.Relationships.HasMany{} = rel
-    assert Map.get(rel, :__used_by__) == true
+    assert Map.get(rel, :__locked_by__) == true
     assert rel.destination == TestResources.Doc
     assert rel.destination_attribute == :snapshot_id
   end
@@ -154,11 +154,11 @@ defmodule AshOwnership.MarkerSurvivalTest do
       end
     end
 
-    refute Ash.Resource.Info.relationship(PlainChild, :plain_parent) |> Map.get(:__uses__)
-    refute Ash.Resource.Info.relationship(PlainParent, :children) |> Map.get(:__used_by__)
+    refute Ash.Resource.Info.relationship(PlainChild, :plain_parent) |> Map.get(:__locks__)
+    refute Ash.Resource.Info.relationship(PlainParent, :children) |> Map.get(:__locked_by__)
   end
 
-  test "ancestor compiles to a BelongsTo that keeps the :__ancestor__ marker" do
+  test "refers compiles to a BelongsTo that keeps the :__refers__ marker" do
     defmodule Org do
       @moduledoc false
       use Ash.Resource, domain: nil, extensions: [AshOwnership]
@@ -172,7 +172,7 @@ defmodule AshOwnership.MarkerSurvivalTest do
       end
     end
 
-    # Org declares no reverse relationship: an ancestor needs none, because the
+    # Org declares no reverse relationship: a reference needs none, because the
     # record's real parent is elsewhere.
     defmodule Row do
       @moduledoc false
@@ -187,16 +187,16 @@ defmodule AshOwnership.MarkerSurvivalTest do
       end
 
       relationships do
-        ancestor(:org, AshOwnership.MarkerSurvivalTest.Org)
+        refers(:org, AshOwnership.MarkerSurvivalTest.Org)
       end
     end
 
     rel = Ash.Resource.Info.relationship(Row, :org)
 
     assert %Ash.Resource.Relationships.BelongsTo{} = rel
-    assert Map.get(rel, :__ancestor__) == true
-    assert Map.get(rel, :__uses__) != true
+    assert Map.get(rel, :__refers__) == true
+    assert Map.get(rel, :__locks__) != true
     assert rel.destination == AshOwnership.MarkerSurvivalTest.Org
-    assert AshOwnership.Info.ancestor?(rel)
+    assert AshOwnership.Info.refers?(rel)
   end
 end

@@ -3,14 +3,14 @@ defmodule AshOwnership.Info do
   Introspection helpers for AshOwnership.
   """
 
-  @doc "Returns true if the relationship was declared with `uses`."
-  def uses?(relationship), do: Map.get(relationship, :__uses__, false) == true
+  @doc "Returns true if the relationship was declared with `locks`."
+  def locks?(relationship), do: Map.get(relationship, :__locks__, false) == true
 
-  @doc "Returns true if the relationship was declared with `ancestor`."
-  def ancestor?(relationship), do: Map.get(relationship, :__ancestor__, false) == true
+  @doc "Returns true if the relationship was declared with `refers`."
+  def refers?(relationship), do: Map.get(relationship, :__refers__, false) == true
 
-  @doc "Returns true if the relationship was declared with `used_by`."
-  def used_by?(relationship), do: Map.get(relationship, :__used_by__, false) == true
+  @doc "Returns true if the relationship was declared with `locked_by`."
+  def locked_by?(relationship), do: Map.get(relationship, :__locked_by__, false) == true
 
   @doc "Returns true if the resource module has the `AshOwnership` extension."
   def enabled?(resource) when is_atom(resource) do

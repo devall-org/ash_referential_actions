@@ -23,7 +23,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      used_by :docs, GuardResources.Doc
+      locked_by :docs, GuardResources.Doc
     end
   end
 
@@ -53,7 +53,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      uses :snapshot, GuardResources.Snapshot do
+      locks :snapshot, GuardResources.Snapshot do
         attribute_writable? true
         attribute_public? true
       end
@@ -78,7 +78,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
 
   defmodule PrepSnapshot do
     @moduledoc false
-    # Borrowable hidden from default reads by a flag-aware global preparation:
+    # Lockable hidden from default reads by a flag-aware global preparation:
     # the target-live guard must still see it.
     use Ash.Resource,
       domain: GuardResources.Domain,
@@ -103,13 +103,13 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      used_by :prep_docs, GuardResources.PrepDoc
+      locked_by :prep_docs, GuardResources.PrepDoc
     end
   end
 
   defmodule PrepDoc do
     @moduledoc false
-    # Borrower hidden from default reads by a flag-aware global preparation:
+    # Locker hidden from default reads by a flag-aware global preparation:
     # the guard must still see it.
     use Ash.Resource,
       domain: GuardResources.Domain,
@@ -134,7 +134,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      uses :prep_snapshot, GuardResources.PrepSnapshot do
+      locks :prep_snapshot, GuardResources.PrepSnapshot do
         attribute_writable? true
         attribute_public? true
       end
@@ -143,8 +143,8 @@ defmodule AshOwnership.Test.Support.GuardResources do
 
   defmodule NaSnapshot do
     @moduledoc false
-    # Non-archival borrowable: destroys are hard deletes; the guard must
-    # still reject them while borrowers exist (no FK on ETS).
+    # Non-archival lockable: destroys are hard deletes; the guard must
+    # still reject them while lockers exist (no FK on ETS).
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
@@ -163,12 +163,12 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      used_by :na_docs, GuardResources.NaDoc
+      locked_by :na_docs, GuardResources.NaDoc
     end
 
     # Optional override for the guard's rejection message.
-    def used_message(:na_docs), do: "NaSnapshot is still in use"
-    def used_message(_other), do: nil
+    def locked_message(:na_docs), do: "NaSnapshot is still in use"
+    def locked_message(_other), do: nil
   end
 
   defmodule NaDoc do
@@ -191,7 +191,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      uses :na_snapshot, GuardResources.NaSnapshot do
+      locks :na_snapshot, GuardResources.NaSnapshot do
         attribute_writable? true
         attribute_public? true
       end
@@ -220,7 +220,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
     relationships do
       # FilteredDoc's primary read is filtered, so the destroy guard must be
       # pointed at an explicit unfiltered read action.
-      used_by :filtered_docs, GuardResources.FilteredDoc do
+      locked_by :filtered_docs, GuardResources.FilteredDoc do
         read_action :guard_read
       end
     end
@@ -228,8 +228,8 @@ defmodule AshOwnership.Test.Support.GuardResources do
 
   defmodule FilteredDoc do
     @moduledoc false
-    # Borrower whose primary read hides inactive rows: the guard must still
-    # count them as live borrowers, via the declared :guard_read action.
+    # Locker whose primary read hides inactive rows: the guard must still
+    # count them as live lockers, via the declared :guard_read action.
     use Ash.Resource,
       domain: GuardResources.Domain,
       data_layer: Ash.DataLayer.Ets,
@@ -256,7 +256,7 @@ defmodule AshOwnership.Test.Support.GuardResources do
     end
 
     relationships do
-      uses :filtered_snapshot, GuardResources.FilteredSnapshot do
+      locks :filtered_snapshot, GuardResources.FilteredSnapshot do
         attribute_writable? true
         attribute_public? true
       end

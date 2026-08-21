@@ -1,6 +1,6 @@
-defmodule AshOwnership.Verifiers.UsesTargetEnabled do
+defmodule AshOwnership.Verifiers.LocksTargetEnabled do
   @moduledoc false
-  # Every `uses` relationship must target a resource with the AshOwnership
+  # Every `locks` relationship must target a resource with the AshOwnership
   # extension, which is what makes the destroy guard and its verifiers apply.
   use Spark.Dsl.Verifier
 
@@ -12,7 +12,7 @@ defmodule AshOwnership.Verifiers.UsesTargetEnabled do
 
     dsl_state
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshOwnership.Info.uses?/1)
+    |> Enum.filter(&AshOwnership.Info.locks?/1)
     |> Enum.find(&(not AshOwnership.Info.enabled?(&1.destination)))
     |> case do
       nil ->
@@ -24,7 +24,7 @@ defmodule AshOwnership.Verifiers.UsesTargetEnabled do
            module: module,
            path: [:relationships, rel.name],
            message: """
-           `uses :#{rel.name}` targets #{inspect(rel.destination)}, which does not have the
+           `locks :#{rel.name}` targets #{inspect(rel.destination)}, which does not have the
            `AshOwnership` extension, so nothing would guard it.
 
            Add `AshOwnership` to #{inspect(rel.destination)}, or use a regular `belongs_to`

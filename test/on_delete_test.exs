@@ -23,21 +23,21 @@ defmodule AshOwnership.OnDeleteTest do
     end
 
     relationships do
-      used_by :nilify_docs, AshOwnership.OnDeleteTest.NilifyDoc do
+      locked_by :nilify_docs, AshOwnership.OnDeleteTest.NilifyDoc do
         destination_attribute :pg_snapshot_id
       end
 
-      used_by :restrict_docs, AshOwnership.OnDeleteTest.RestrictDoc do
+      locked_by :restrict_docs, AshOwnership.OnDeleteTest.RestrictDoc do
         destination_attribute :pg_snapshot_id
       end
 
-      used_by :ignore_docs, AshOwnership.OnDeleteTest.IgnoreDoc do
+      locked_by :ignore_docs, AshOwnership.OnDeleteTest.IgnoreDoc do
         destination_attribute :pg_snapshot_id
       end
     end
   end
 
-  test "a uses reference with on_delete: :nilify is rejected" do
+  test "a locks reference with on_delete: :nilify is rejected" do
     error =
       assert_dsl_error %Spark.Error.DslError{} do
         defmodule NilifyDoc do
@@ -65,7 +65,7 @@ defmodule AshOwnership.OnDeleteTest do
           end
 
           relationships do
-            uses :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
+            locks :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
           end
         end
       end
@@ -73,7 +73,7 @@ defmodule AshOwnership.OnDeleteTest do
     assert error.message =~ "restrict semantics"
   end
 
-  test "a uses reference with ignore?: true is rejected" do
+  test "a locks reference with ignore?: true is rejected" do
     error =
       assert_dsl_error %Spark.Error.DslError{} do
         defmodule IgnoreDoc do
@@ -101,7 +101,7 @@ defmodule AshOwnership.OnDeleteTest do
           end
 
           relationships do
-            uses :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
+            locks :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
           end
         end
       end
@@ -109,7 +109,7 @@ defmodule AshOwnership.OnDeleteTest do
     assert error.message =~ "removes the foreign key constraint"
   end
 
-  test "a uses reference keeping restrict semantics compiles" do
+  test "a locks reference keeping restrict semantics compiles" do
     refute_dsl_errors do
       defmodule RestrictDoc do
         @moduledoc false
@@ -136,12 +136,12 @@ defmodule AshOwnership.OnDeleteTest do
         end
 
         relationships do
-          uses :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
+          locks :pg_snapshot, AshOwnership.OnDeleteTest.PgSnapshot
         end
       end
     end
 
     rel = Ash.Resource.Info.relationship(AshOwnership.OnDeleteTest.RestrictDoc, :pg_snapshot)
-    assert AshOwnership.Info.uses?(rel)
+    assert AshOwnership.Info.locks?(rel)
   end
 end
