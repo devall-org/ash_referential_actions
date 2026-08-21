@@ -1,7 +1,7 @@
-defmodule AshOwnership.Transformers.AddTargetGuard do
+defmodule AshReferentialActions.Transformers.AddSourceGuard do
   @moduledoc false
-  # Prepends AshOwnership.Changes.EnsureTargetLive to every create and update
-  # action of a user resource, so a locks foreign key can never be
+  # Prepends AshReferentialActions.Changes.EnsureTargetLive to every create and update
+  # action of a referring resource, so a guarded foreign key can never be
   # pointed at an archived or missing target.
   use Spark.Dsl.Transformer
 
@@ -18,10 +18,13 @@ defmodule AshOwnership.Transformers.AddTargetGuard do
 
   @impl true
   def transform(dsl_state) do
-    # Nothing to guard without locks edges. Skipping keeps the extension
+    # Nothing to guard without restrict/nilify edges. Skipping keeps the extension
     # free to sit on a base resource module: resources that use nothing
     # are untouched, and in particular stay atomic-capable for bulk updates.
-    if Enum.any?(Ash.Resource.Info.relationships(dsl_state), &AshOwnership.Info.locks?/1) do
+    if Enum.any?(
+         Ash.Resource.Info.relationships(dsl_state),
+         &AshReferentialActions.Info.guarded?/1
+       ) do
       add_guard(dsl_state)
     else
       {:ok, dsl_state}
@@ -35,7 +38,7 @@ defmodule AshOwnership.Transformers.AddTargetGuard do
     |> Enum.reduce({:ok, dsl_state}, fn action, {:ok, dsl_state} ->
       with {:ok, guard} <-
              Transformer.build_entity(Ash.Resource.Dsl, [:actions, action.type], :change,
-               change: {AshOwnership.Changes.EnsureTargetLive, []}
+               change: {AshReferentialActions.Changes.EnsureTargetLive, []}
              ) do
         new_action = %{action | changes: [guard | action.changes]}
 

@@ -1,7 +1,7 @@
-defmodule AshOwnership.Changes.EnsureTargetLive do
+defmodule AshReferentialActions.Changes.EnsureTargetLive do
   @moduledoc """
   Runtime guard added to every create and update action of an
-  resource that declares `locks`: writing a `locks` foreign key is rejected
+  resource that declares `restrict` or `nilify`: writing the foreign key is rejected
   unless the target exists and is live.
 
   Without this, a user could be pointed at an already-archived (or, on
@@ -25,8 +25,8 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
   first and the archive's own guard sees this user. Without lock support
   (e.g. ETS) the check stays a plain application-level read.
 
-  The target is looked up via the locks relationship's declared
-  `read_action` (or the used resource's primary read — a verifier rejects a
+  The target is looked up via the referential relationship's declared
+  `read_action` (or the referenced resource's primary read — a verifier rejects a
   filtered primary read as the default), so action-level read filters cannot
   silently hide a live target; archival's global filter still applies, so an
   archived target counts as not live.
@@ -40,7 +40,7 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
     |> Ash.Changeset.after_action(&check_result_keys/2)
   end
 
-  # Updates that provably cannot touch a locks foreign key stay
+  # Updates that provably cannot touch a referential foreign key stay
   # atomic-compatible. `atomic/3` runs before later changes in the action, so
   # any other change (action-level or global) could still add a foreign key
   # atomic we cannot see yet — returning `{:ok, changeset}` there would skip
@@ -50,22 +50,23 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
   @impl true
   def atomic(changeset, _opts, _context) do
     cond do
-      touches_locks_key?(changeset) ->
-        {:not_atomic, "AshOwnership.Changes.EnsureTargetLive must query the locked target"}
+      touches_guarded_key?(changeset) ->
+        {:not_atomic,
+         "AshReferentialActions.Changes.EnsureTargetLive must query the referenced target"}
 
       has_other_changes?(changeset) ->
         {:not_atomic,
-         "a later change could set a locks key atomically, " <>
-           "which AshOwnership.Changes.EnsureTargetLive must verify"}
+         "a later change could set a referential key atomically, " <>
+           "which AshReferentialActions.Changes.EnsureTargetLive must verify"}
 
       true ->
         {:ok, changeset}
     end
   end
 
-  defp touches_locks_key?(changeset) do
+  defp touches_guarded_key?(changeset) do
     changeset.resource
-    |> locks_rels()
+    |> guarded_rels()
     |> Enum.any?(fn rel ->
       Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) or
         Keyword.has_key?(changeset.atomics, rel.source_attribute)
@@ -89,15 +90,15 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
     end)
   end
 
-  defp locks_rels(resource) do
+  defp guarded_rels(resource) do
     resource
     |> Ash.Resource.Info.relationships()
-    |> Enum.filter(&AshOwnership.Info.locks?/1)
+    |> Enum.filter(&AshReferentialActions.Info.guarded?/1)
   end
 
   defp check_changing_keys(changeset) do
     changeset.resource
-    |> locks_rels()
+    |> guarded_rels()
     |> Enum.reduce(changeset, fn rel, changeset ->
       if Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) do
         case verify_target(
@@ -116,7 +117,7 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
 
   defp check_result_keys(changeset, result) do
     changeset.resource
-    |> locks_rels()
+    |> guarded_rels()
     |> Enum.reduce_while({:ok, result}, fn rel, {:ok, result} ->
       value = Map.get(result, rel.source_attribute)
       original = original_value(changeset, rel.source_attribute)
@@ -140,7 +141,7 @@ defmodule AshOwnership.Changes.EnsureTargetLive do
       is_nil(value) ->
         :ok
 
-      AshOwnership.Query.exists?(
+      AshReferentialActions.Query.exists?(
         rel,
         [{rel.destination_attribute, value}],
         changeset,

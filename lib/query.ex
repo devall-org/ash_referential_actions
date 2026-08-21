@@ -1,11 +1,11 @@
-defmodule AshOwnership.Query do
+defmodule AshReferentialActions.Query do
   @moduledoc false
   # Shared query plumbing for the runtime guards.
 
   @doc false
-  # The read action a guard locks to query through `rel`: the relationship's
+  # The read action a guard uses to query through `rel`: the relationship's
   # `read_action` if set, otherwise the destination's primary read.
-  # `AshOwnership.Verifiers.LockedByConsistency` guarantees at compile time
+  # The pair verifier guarantees at compile time
   # that whichever action this resolves to carries no action-level
   # filters/preparations, so it cannot hide physically live rows.
   def guard_read_action(rel) do
@@ -26,7 +26,7 @@ defmodule AshOwnership.Query do
   end
 
   @doc false
-  # Existence check through `rel` (a `locks` or `locked_by` relationship),
+  # Existence check through `rel` (a `restrict`/`nilify` relationship relationship),
   # filtered by `filter` (keyword statement).
   #
   # `authorize?: false` bypasses policies (a policy must not be able to hide
@@ -35,7 +35,7 @@ defmodule AshOwnership.Query do
   # notably archival's `is_nil(archived_at)` filter, which is exactly what
   # makes archived rows count as gone.
   #
-  # Guard queries carry `context[:ash_ownership_guard?]`, set BEFORE for_read so
+  # Guard queries carry `context[:ash_referential_actions_guard?]`, set BEFORE for_read so
   # that global preparations see it — custom global preparations that hide
   # rows from default reads should pass the query through unchanged when this
   # flag is set.
@@ -52,7 +52,7 @@ defmodule AshOwnership.Query do
       rel.destination
       |> Ash.Query.new()
       |> Ash.Query.set_context(rel.context || %{})
-      |> Ash.Query.set_context(%{ash_ownership_guard?: true})
+      |> Ash.Query.set_context(%{ash_referential_actions_guard?: true})
 
     query =
       case guard_read_action(rel) do
@@ -87,7 +87,7 @@ defmodule AshOwnership.Query do
 
       resource
       |> Ash.Query.new()
-      |> Ash.Query.set_context(%{ash_ownership_guard?: true})
+      |> Ash.Query.set_context(%{ash_referential_actions_guard?: true})
       |> Ash.Query.do_filter(filter)
       |> Ash.Query.lock(:for_update)
       |> Ash.read_one(

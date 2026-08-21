@@ -1,19 +1,20 @@
-defmodule AshOwnership.MixProject do
+defmodule AshReferentialActions.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :ash_ownership,
+      app: :ash_referential_actions,
       version: "0.1.0",
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       consolidate_protocols: Mix.env() not in [:dev, :test],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "Ownership semantics for Ash relationships and lifecycle locks.",
+      description:
+        "Explicit cascade, restrict, nilify, and view semantics for Ash relationships.",
       package: package(),
-      source_url: "https://github.com/devall-org/ash_ownership",
-      homepage_url: "https://github.com/devall-org/ash_ownership",
+      source_url: "https://github.com/devall-org/ash_referential_actions",
+      homepage_url: "https://github.com/devall-org/ash_referential_actions",
       docs: [
         main: "readme",
         extras: ["README.md"]
@@ -35,9 +36,9 @@ defmodule AshOwnership.MixProject do
   defp deps do
     [
       {:ash, ">= 0.0.0"},
+      {:ash_archival, ">= 0.0.0", optional: true},
+      {:ash_postgres, ">= 0.0.0", optional: true},
       {:spark, ">= 0.0.0"},
-      {:ash_archival, ">= 0.0.0", only: :test},
-      {:ash_postgres, ">= 0.0.0", only: :test},
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false}
     ]
@@ -45,10 +46,10 @@ defmodule AshOwnership.MixProject do
 
   defp package do
     [
-      name: "ash_ownership",
+      name: "ash_referential_actions",
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/devall-org/ash_ownership"
+        "GitHub" => "https://github.com/devall-org/ash_referential_actions"
       }
     ]
   end
