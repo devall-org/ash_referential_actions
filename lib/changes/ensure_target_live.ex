@@ -40,24 +40,15 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
     |> Ash.Changeset.after_action(&check_result_keys/2)
   end
 
-  # Updates that provably cannot touch a referential foreign key stay
-  # atomic-compatible. `atomic/3` runs before later changes in the action, so
-  # any other change (action-level or global) could still add a foreign key
-  # atomic we cannot see yet — returning `{:ok, changeset}` there would skip
-  # hook registration entirely and let an atomic bulk update bypass the
-  # guard. So the fast path applies only when the key is untouched AND no
-  # other changes exist; everything else takes the non-atomic path.
+  # The guard change is appended after the action's own changes, so atomics
+  # already contain any foreign-key updates produced by that action. Updates
+  # that do not touch a guarded key remain fully atomic.
   @impl true
   def atomic(changeset, _opts, _context) do
     cond do
       touches_guarded_key?(changeset) ->
         {:not_atomic,
          "AshReferentialActions.Changes.EnsureTargetLive must query the referenced target"}
-
-      has_other_changes?(changeset) ->
-        {:not_atomic,
-         "a later change could set a referential key atomically, " <>
-           "which AshReferentialActions.Changes.EnsureTargetLive must verify"}
 
       true ->
         {:ok, changeset}
@@ -70,23 +61,6 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
     |> Enum.any?(fn rel ->
       Ash.Changeset.changing_attribute?(changeset, rel.source_attribute) or
         Keyword.has_key?(changeset.atomics, rel.source_attribute)
-    end)
-  end
-
-  defp has_other_changes?(changeset) do
-    action_changes =
-      case changeset.action do
-        %{changes: changes} -> changes
-        _ -> []
-      end
-
-    global_changes = Ash.Resource.Info.changes(changeset.resource, changeset.action_type)
-
-    (action_changes ++ global_changes)
-    |> Enum.any?(fn
-      %Ash.Resource.Change{change: {__MODULE__, _}} -> false
-      %Ash.Resource.Change{} -> true
-      %{} -> false
     end)
   end
 
