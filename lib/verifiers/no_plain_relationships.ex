@@ -32,13 +32,13 @@ defmodule AshReferentialActions.Verifiers.NoPlainRelationships do
         dsl_error(module, rel, """
         Plain #{relationship_type(rel)} is forbidden on resources using AshReferentialActions.
         Declare `cascade_#{relationship_type(rel)}`, `restrict_#{relationship_type(rel)}`, \
-        `nilify_#{relationship_type(rel)}`, or `view_#{relationship_type(rel)}`.
+        `nilify_#{relationship_type(rel)}`, or `do_nothing_#{relationship_type(rel)}`.
         """)
 
       action == :nilify and match?(%BelongsTo{allow_nil?: false}, rel) ->
         dsl_error(module, rel, "nilify_belongs_to must allow nil")
 
-      action != :view and reverse?(rel) and not clean_reverse?(rel) ->
+      action != :do_nothing and reverse?(rel) and not clean_reverse?(rel) ->
         dsl_error(
           module,
           rel,

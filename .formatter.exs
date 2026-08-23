@@ -1,5 +1,5 @@
 spark_locals_without_parens =
-  for action <- [:cascade, :restrict, :nilify, :view],
+  for action <- [:cascade, :restrict, :nilify, :do_nothing],
       type <- [:belongs_to, :has_many, :has_one],
       arity <- [2, 3] do
     name = :"#{action}_#{type}"

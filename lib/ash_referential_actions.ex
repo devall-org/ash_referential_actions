@@ -8,7 +8,7 @@ defmodule AshReferentialActions do
   * `cascade_*` destroys related records through their primary destroy action.
   * `restrict_*` rejects the destroy while live related records exist.
   * `nilify_*` clears the foreign key on live related records.
-  * `view_*` is lifecycle-neutral and exists only for loading or querying.
+  * `do_nothing_*` declares a normal Ash relationship without adding lifecycle behavior.
 
   The action is declared on both sides of an attributable relationship:
 
@@ -25,7 +25,7 @@ defmodule AshReferentialActions do
   PostgreSQL deletes.
   """
 
-  @actions [:cascade, :restrict, :nilify, :view]
+  @actions [:cascade, :restrict, :nilify, :do_nothing]
 
   @ash_relationship_entities Ash.Resource.Dsl.sections()
                              |> Enum.find(&(&1.name == :relationships))

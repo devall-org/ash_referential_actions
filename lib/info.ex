@@ -1,7 +1,7 @@
 defmodule AshReferentialActions.Info do
   @moduledoc "Introspection helpers for AshReferentialActions."
 
-  @actions [:cascade, :restrict, :nilify, :view]
+  @actions [:cascade, :restrict, :nilify, :do_nothing]
 
   @doc "Returns the declared referential action, or nil for an unmarked relationship."
   def action(relationship), do: Map.get(relationship, :__referential_action__)
