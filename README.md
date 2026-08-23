@@ -11,27 +11,26 @@ Explicit referential actions for Ash relationships.
 Declare the same action on both sides of an attributable relationship:
 
 ```elixir
-# Parent -> child ownership
-cascade_belongs_to :invoice, Invoice, allow_nil?: false
-cascade_has_many :line_items, LineItem
+# A comment is owned by its post
+cascade_belongs_to :post, Post, allow_nil?: false
+cascade_has_many :comments, Comment
 
-# Shared target that cannot disappear while referenced
-restrict_belongs_to :template, Template, allow_nil?: false
-restrict_has_many :documents, Document
+# A product cannot disappear while an order item references it
+restrict_belongs_to :product, Product, allow_nil?: false
+restrict_has_many :order_items, OrderItem
 
-# Weak reference cleared when the target disappears
-nilify_belongs_to :invoice, Invoice, allow_nil?: true
-nilify_has_many :bulk_entries, BulkEntry
+# A task remains when its assignee disappears
+nilify_belongs_to :assignee, User, allow_nil?: true
+nilify_has_many :assigned_tasks, Task, destination_attribute: :assignee_id
 
 # Query-only relationship with no lifecycle behavior
-view_has_many :active_documents, Document, filter: expr(is_active)
+view_has_many :published_posts, Post, filter: expr(published)
 ```
 
 Resources using the extension cannot declare plain attributable `belongs_to`, `has_many`, or `has_one`. Use one of `cascade_*`, `restrict_*`, `nilify_*`, or `view_*`.
 Generated reverse relationships to resources outside the extension are exempt.
 
-`belongs_to` nullability and visibility use the normal Ash options instead of
-combinatorial macro variants:
+Configure each `belongs_to` with the normal Ash options:
 
 - required: `allow_nil?: false`
 - optional: `allow_nil?: true`
@@ -59,7 +58,7 @@ When cascade order must be pinned:
 
 ```elixir
 referential_actions do
-  archive_last [:templates]
+  archive_last [:shared_assets]
 end
 ```
 
@@ -86,16 +85,16 @@ The adapters can be combined when both soft archive and physical delete must sha
 For:
 
 ```elixir
-nilify_belongs_to :invoice, Invoice, allow_nil?: true
+nilify_belongs_to :assignee, User, allow_nil?: true
 ```
 
 AshReferentialActions generates a private update action named from the source attribute, for example:
 
 ```elixir
-:__ash_referential_actions_nilify_invoice_id__
+:__ash_referential_actions_nilify_assignee_id__
 ```
 
-The action accepts no input and only sets `invoice_id` to nil. The target's archival change invokes it through the matching reverse relationship with Ash's `cascade_update` change.
+The action accepts no input and only sets `assignee_id` to nil. The target's archival change invokes it through the matching reverse relationship with Ash's `cascade_update` change.
 
 ## Guarantees
 

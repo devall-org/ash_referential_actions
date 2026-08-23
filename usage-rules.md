@@ -17,16 +17,15 @@ their lifecycle is outside this graph.
 Declare the same action on both sides and align both key attributes:
 
 ```elixir
-nilify_belongs_to :invoice, Invoice, allow_nil?: true
-nilify_has_many :bulk_entries, BulkEntry, destination_attribute: :invoice_id
+nilify_belongs_to :assignee, User, allow_nil?: true
+nilify_has_many :assigned_tasks, Task, destination_attribute: :assignee_id
 ```
 
 Lifecycle reverse relationships (`cascade/restrict/nilify has_many/has_one`) must be unfiltered, attributable, and manual-free. Add separate `view_has_many/view_has_one` relationships for filtered business views.
 
 ## Belongs-to options
 
-Do not create req/opt/private macro variants. Use the normal Ash options on the
-four action macros:
+Use the normal Ash options directly on the four action macros:
 
 ```elixir
 cascade_belongs_to :required_parent, Parent, allow_nil?: false
@@ -71,7 +70,7 @@ If restrict edges require a specific sequential cascade order, declare only the 
 
 ```elixir
 referential_actions do
-  archive_last [:locked_resource]
+  archive_last [:shared_asset]
 end
 ```
 

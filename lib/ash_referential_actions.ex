@@ -13,11 +13,11 @@ defmodule AshReferentialActions do
   The action is declared on both sides of an attributable relationship:
 
       relationships do
-        cascade_belongs_to :invoice, Invoice, allow_nil?: false
+        cascade_belongs_to :post, Post, allow_nil?: false
       end
 
       relationships do
-        cascade_has_many :line_items, LineItem
+        cascade_has_many :comments, Comment
       end
 
   Use `AshReferentialActions.Archival` to apply these semantics to soft
