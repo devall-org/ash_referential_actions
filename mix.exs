@@ -11,7 +11,7 @@ defmodule AshReferentialActions.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description:
-        "Explicit cascade, restrict, nilify, and view semantics for Ash relationships.",
+        "Explicit cascade, restrict, nilify, and do-nothing semantics for Ash relationships.",
       package: package(),
       source_url: "https://github.com/devall-org/ash_referential_actions",
       homepage_url: "https://github.com/devall-org/ash_referential_actions",
@@ -35,10 +35,10 @@ defmodule AshReferentialActions.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ash, ">= 0.0.0"},
-      {:ash_archival, ">= 0.0.0", optional: true},
-      {:ash_postgres, ">= 0.0.0", optional: true},
-      {:spark, ">= 0.0.0"},
+      {:ash, "~> 3.31"},
+      {:ash_archival, "~> 2.0", optional: true},
+      {:ash_postgres, "~> 2.11", optional: true},
+      {:spark, "~> 2.7"},
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false}
     ]
@@ -47,6 +47,7 @@ defmodule AshReferentialActions.MixProject do
   defp package do
     [
       name: "ash_referential_actions",
+      files: ["lib", ".formatter.exs", "mix.exs", "README.md", "LICENSE", "usage-rules.md"],
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/devall-org/ash_referential_actions"
