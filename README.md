@@ -49,14 +49,6 @@ The archival adapter also installs `AshArchival.Resource` and:
 - rejects new cascade/restrict/nilify references to archived targets
 - validates cascade destinations and ordering
 
-When cascade order must be pinned:
-
-```elixir
-referential_actions do
-  archive_last [:shared_assets]
-end
-```
-
 ### PostgreSQL physical delete
 
 ```elixir
@@ -74,48 +66,6 @@ The PostgreSQL adapter generates migration reference behavior:
 Do not enable this adapter merely because an application uses PostgreSQL. Applications that only soft-archive records should normally use the archival adapter alone and retain restrictive database foreign keys as a safety net.
 
 The adapters can be combined when both soft archive and physical delete must share the same semantics.
-
-## Migrating from AshCascadeArchival
-
-Replace the dependency and extension:
-
-```elixir
-# Before
-{:ash_cascade_archival, "~> 0.4"}
-
-use Ash.Resource,
-  extensions: [AshCascadeArchival]
-
-# After
-{:ash_referential_actions, "~> 0.1"}
-
-use Ash.Resource,
-  extensions: [AshReferentialActions.Archival]
-```
-
-AshCascadeArchival selected reverse relationships for cascading at the resource level:
-
-```elixir
-cascade_archive do
-  archive_last [:children]
-  except [:history]
-end
-```
-
-AshReferentialActions moves that decision to each relationship:
-
-```elixir
-relationships do
-  cascade_has_many :children, Child
-  do_nothing_has_many :history, History
-end
-
-referential_actions do
-  archive_last [:children]
-end
-```
-
-The migration is not a mechanical rename. Classify every former `except` relationship as `restrict_*`, `nilify_*`, or `do_nothing_*` based on the intended lifecycle behavior, and declare the same action on both sides of each attributable relationship.
 
 ## Generated nilify action
 
