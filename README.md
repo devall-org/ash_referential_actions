@@ -49,6 +49,18 @@ The archival adapter also installs `AshArchival.Resource` and:
 - rejects new cascade/restrict/nilify references to archived targets
 - validates cascade destinations and ordering
 
+The live-target guard batches its reads for bulk creates and streamed bulk updates:
+one read before and one after each batch, per guarded relationship, domain, and
+tenant with keys to check. For example, 5,000 creates with one relationship and
+`batch_size: 100` require 100 guard reads. Required read-action pagination does
+not truncate the keys being checked, and PostgreSQL reads retain `FOR SHARE` locks.
+
+Batches with record hooks, managed relationships, resource-level changes, or
+other `before_batch` callbacks retain individual guard checks to preserve hook
+ordering. Single actions retain their existing hooks. Atomic updates that do not
+change guarded keys do not run guard reads. Ash's transaction and error options
+continue to determine partial success and rollback behavior.
+
 ### PostgreSQL physical delete
 
 ```elixir
