@@ -22,8 +22,11 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   Bulk batches without record hooks or managed relationships instead check
   keys together in `before_batch` and `after_batch`, once per relationship,
   domain and tenant. Batches with hooks retain the individual checks so keys
-  repaired by a hook are not rejected early. Atomic updates that leave guarded
-  keys alone do not run batch callbacks or request result records for this guard.
+  are checked at the original hook position. Global changes that only modify
+  attributes do not disable batching; global `before_batch` callbacks still
+  require individual checks because they run after this guard's `before_batch`.
+  Atomic updates that leave guarded keys alone do not run batch callbacks or
+  request result records for this guard.
 
   The lookup takes a `FOR SHARE` lock on the target row where the data layer
   supports one, so a concurrent archive of that target must wait: either it
@@ -51,8 +54,13 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
 
   @impl true
   def batch_change(changesets, opts, context) do
+    # Reserve the original hook positions before resource-level changes run.
+    # before_batch removes these hooks only after proving this batch can use
+    # grouped checks. Late hooks therefore never move ahead of our guard.
+    changesets = Enum.map(changesets, &change(&1, opts, context))
+
     if Enum.any?(changesets, &individual_hooks?/1) do
-      Enum.map(changesets, &change(&1, opts, context))
+      changesets
     else
       Enum.map(changesets, &Ash.Changeset.put_context(&1, @batch_mode, :batch))
     end
@@ -65,16 +73,19 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   def batch_callbacks?(_changesets, _opts, _context), do: true
 
   @impl true
-  def before_batch(changesets, opts, context) do
-    # before_transaction and later changes can install hooks after batch_change.
+  def before_batch(changesets, _opts, _context) do
+    # Global changes have now run, so their direct attribute writes are visible.
+    # If they installed hooks, retain our already-positioned individual hooks.
+    individual? = Enum.any?(changesets, &individual_hooks?/1)
+
     changesets =
-      if Enum.any?(changesets, &(batched?(&1) and individual_hooks?(&1))) do
-        Enum.map(changesets, fn changeset ->
-          if batched?(changeset), do: change(changeset, opts, context), else: changeset
-        end)
-      else
-        changesets
-      end
+      Enum.map(changesets, fn changeset ->
+        cond do
+          not batched?(changeset) -> changeset
+          individual? -> Ash.Changeset.put_context(changeset, @batch_mode, :individual)
+          true -> without_guard_hooks(changeset)
+        end
+      end)
 
     errors = batch_errors(changesets, &changing_key/2)
 
@@ -107,21 +118,37 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   # Moving checks across user hooks can reject values that a hook would repair,
   # or allow subsequent hooks to run before a failure. Keep their original order.
   defp individual_hooks?(changeset) do
+    changeset = without_guard_hooks(changeset)
+
     Enum.any?(
       [:before_action, :after_action, :before_transaction, :around_action, :around_transaction],
       &(Map.get(changeset, &1) not in [nil, []])
-    ) or changeset.relationships not in [nil, %{}] or later_changes?(changeset)
+    ) or changeset.relationships not in [nil, %{}] or later_batch_hooks?(changeset)
   end
 
-  # Resource changes run after action changes. Likewise another before_batch
-  # can repair keys or install hooks after batch_change has run. In these cases
-  # install the original hooks now, at the same position as single-record runs.
-  defp later_changes?(changeset) do
-    Ash.Resource.Info.changes(changeset.resource, changeset.action_type) != [] or
-      Enum.any?((changeset.action && changeset.action.changes) || [], fn
-        %{change: {module, _}} when module != __MODULE__ -> module.has_before_batch?()
-        _ -> false
-      end)
+  defp without_guard_hooks(changeset) do
+    %{
+      changeset
+      | before_action:
+          Enum.reject(changeset.before_action, fn hook -> hook == (&check_changing_keys/1) end),
+        after_action:
+          Enum.reject(changeset.after_action, fn hook -> hook == (&check_result_keys/2) end)
+    }
+  end
+
+  # Action before_batch callbacks precede this guard, but resource-level ones
+  # run after it. Their writes/hooks are not visible during our recheck, so keep
+  # individual checks for that case. Ordinary global changes are batch-safe.
+  defp later_batch_hooks?(changeset) do
+    changeset.resource
+    |> Ash.Resource.Info.changes(changeset.action_type)
+    |> Enum.any?(fn
+      %{change: {module, _}} when module != __MODULE__ ->
+        module.has_batch_change?() and module.has_before_batch?()
+
+      _ ->
+        false
+    end)
   end
 
   defp changing_key(changeset, rel) do

@@ -9,6 +9,7 @@ defmodule AshReferentialActions.BulkGuardTest do
     resources do
       resource AshReferentialActions.BulkGuardTest.RestrictTarget
       resource AshReferentialActions.BulkGuardTest.RestrictLocker
+      resource AshReferentialActions.BulkGuardTest.LateBatchLocker
     end
   end
 
@@ -29,6 +30,9 @@ defmodule AshReferentialActions.BulkGuardTest do
     relationships do
       restrict_has_many :lockers, AshReferentialActions.BulkGuardTest.RestrictLocker,
         destination_attribute: :target_id
+
+      restrict_has_many :late_lockers, AshReferentialActions.BulkGuardTest.LateBatchLocker,
+        destination_attribute: :target_id
     end
   end
 
@@ -46,9 +50,67 @@ defmodule AshReferentialActions.BulkGuardTest do
       defaults [:read, :destroy, create: :*, update: :*]
     end
 
+    changes do
+      change AshReferentialActions.Test.GuardGlobalChange, on: [:create]
+    end
+
     relationships do
       restrict_belongs_to :target, RestrictTarget, allow_nil?: false
     end
+  end
+
+  defmodule LateBatchLocker do
+    use Ash.Resource,
+      domain: Domain,
+      data_layer: Ash.DataLayer.Ets,
+      extensions: [AshReferentialActions.Archival]
+
+    attributes do
+      uuid_primary_key :id
+    end
+
+    actions do
+      defaults [:read, create: :*]
+    end
+
+    changes do
+      change AshReferentialActions.Test.GuardGlobalBeforeBatch, on: [:create]
+    end
+
+    relationships do
+      restrict_belongs_to :target, RestrictTarget, allow_nil?: false
+    end
+  end
+
+  test "global before_batch repairs the input before the original guard executes" do
+    live = create_target()
+
+    result =
+      Ash.bulk_create([%{target_id: Ash.UUID.generate()}], LateBatchLocker, :create,
+        context: %{global_batch_target: live.id},
+        authorize?: false,
+        return_records?: true,
+        return_errors?: true
+      )
+
+    assert result.status == :success
+    assert [%{target_id: id}] = result.records
+    assert id == live.id
+  end
+
+  test "late global before_action does not move ahead of the original guard" do
+    live = create_target()
+
+    result =
+      Ash.bulk_create([%{target_id: Ash.UUID.generate()}], RestrictLocker, :create,
+        context: %{global_guard_test: {:before, live.id}},
+        authorize?: false,
+        return_records?: true,
+        return_errors?: true
+      )
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "이미 보관되었습니다"
   end
 
   test "bulk create accepts live targets and rejects only missing/archived inputs without rollback" do

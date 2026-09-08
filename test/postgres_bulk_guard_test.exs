@@ -35,6 +35,7 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     attributes do
       uuid_primary_key :id
       attribute :tenant_id, :string, public?: true
+      attribute :encrypted_info, :string, public?: true
     end
 
     multitenancy do
@@ -107,6 +108,22 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
         argument :target, :map, allow_nil?: false
         change manage_relationship(:target, type: :append_and_remove)
       end
+
+      create :early_batch do
+        accept [:target_id]
+        change AshReferentialActions.Test.GuardGlobalBeforeBatch
+      end
+    end
+
+    changes do
+      change AshReferentialActions.Test.GuardGlobalChange, on: [:create]
+      change AshReferentialActions.Test.GuardGlobalAfterBatch, on: [:create]
+
+      change fn changeset, _context ->
+               label = Ash.Changeset.get_attribute(changeset, :label) || "global"
+               Ash.Changeset.force_change_attribute(changeset, :label, label)
+             end,
+             on: [:create]
     end
 
     relationships do
@@ -134,7 +151,7 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
 
     # This suite is opt-in and targets a disposable database; see test/README.md.
     Repo.query!(
-      "CREATE TABLE IF NOT EXISTS guard_test_targets (id uuid PRIMARY KEY, tenant_id text NOT NULL, archived_at timestamp)"
+      "CREATE TABLE IF NOT EXISTS guard_test_targets (id uuid PRIMARY KEY, tenant_id text NOT NULL, archived_at timestamp, encrypted_info text)"
     )
 
     Repo.query!(
@@ -173,15 +190,97 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     send(pid, {:sql, metadata.query})
   end
 
-  test "seven inputs in batches of three execute six guard queries", %{tenant: tenant} do
+  test "global changes still allow six guard queries for seven inputs in batches of three", %{
+    tenant: tenant
+  } do
     target = target(tenant)
     drain_queries()
     result = bulk(List.duplicate(%{target_id: target.id}, 7), tenant, batch_size: 3)
     assert result.status == :success
     assert length(result.records) == 7
+    assert Enum.all?(result.records, &(&1.label == "global"))
     queries = guard_queries()
     assert length(queries) == 6
     assert Enum.all?(queries, &String.contains?(&1, "FOR SHARE"))
+  end
+
+  test "batch target reads select only the key even with large non-key columns", %{tenant: tenant} do
+    live =
+      Ash.create!(Target, %{encrypted_info: String.duplicate("x", 100_000)},
+        tenant: tenant,
+        authorize?: false
+      )
+
+    drain_queries()
+    assert bulk([%{target_id: live.id}], tenant).status == :success
+    queries = guard_queries()
+    assert length(queries) == 2
+
+    for query <- queries do
+      assert [_, projection] = Regex.run(~r/\ASELECT (.*?) FROM /s, query)
+      assert Regex.match?(~r/\A\w+\."id"\z/, projection)
+      refute String.contains?(projection, "encrypted_info")
+    end
+  end
+
+  test "direct FK changes in global change are checked in the batch", %{tenant: tenant} do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      bulk([%{target_id: Ash.UUID.generate()}], tenant,
+        context: %{global_guard_test: {:direct, live.id}}
+      )
+
+    assert result.status == :success
+    assert [%{target_id: id}] = result.records
+    assert id == live.id
+    assert length(guard_queries()) == 2
+  end
+
+  test "action before_batch runs before the guard and does not require individual checks", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      Ash.bulk_create(List.duplicate(%{target_id: Ash.UUID.generate()}, 3), Source, :early_batch,
+        context: %{global_batch_target: live.id},
+        tenant: tenant,
+        authorize?: false,
+        return_records?: true,
+        return_errors?: true
+      )
+
+    assert result.status == :success
+    assert length(result.records) == 3
+    assert Enum.all?(result.records, &(&1.target_id == live.id))
+    assert length(guard_queries()) == 2
+  end
+
+  test "late global before_action keeps its original position after the guard", %{tenant: tenant} do
+    live = target(tenant)
+
+    result =
+      bulk([%{target_id: Ash.UUID.generate()}], tenant,
+        context: %{global_guard_test: {:before, live.id}}
+      )
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "이미 보관되었습니다"
+    assert stored_count(tenant) == 0
+  end
+
+  test "global after_action does not run ahead of a failing result guard", %{tenant: tenant} do
+    result =
+      bulk([%{label: "trigger_missing_target"}], tenant,
+        context: %{global_guard_test: {:after, self()}}
+      )
+
+    assert result.status == :error
+    refute_receive :global_after_action_ran
+    assert stored_count(tenant) == 0
   end
 
   test "distinct keys beyond required pagination are all found", %{tenant: tenant} do
