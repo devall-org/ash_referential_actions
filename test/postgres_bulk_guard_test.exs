@@ -286,7 +286,7 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
       )
 
     assert result.status == :error
-    assert inspect(result.errors) =~ "이미 보관되었습니다"
+    assert inspect(result.errors) =~ "does not exist or is already archived"
     assert stored_count(tenant) == 0
   end
 
@@ -311,7 +311,7 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
       )
 
     assert result.status == :error
-    assert inspect(result.errors) =~ "이미 보관되었습니다"
+    assert inspect(result.errors) =~ "does not exist or is already archived"
     assert stored_count(tenant) == 0
     refute_receive :action_after_batch_ran
   end
@@ -567,7 +567,7 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     Process.put(:guard_read_failure, true)
     error = assert_raise Ash.Error.Unknown, fn -> bulk([%{target_id: live.id}], tenant) end
     assert Exception.message(error) =~ "guard read failed"
-    refute Exception.message(error) =~ "이미 보관되었습니다"
+    refute Exception.message(error) =~ "does not exist or is already archived"
     assert stored_count(tenant) == 0
   end
 

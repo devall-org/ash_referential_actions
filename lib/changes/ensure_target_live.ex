@@ -320,5 +320,6 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   end
 
   defp missing_message(rel),
-    do: ":#{rel.name} 관계의 #{inspect(rel.destination)} 대상을 찾을 수 없거나 이미 보관되었습니다."
+    do:
+      "The #{inspect(rel.destination)} target for relationship :#{rel.name} does not exist or is already archived."
 end
