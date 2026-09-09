@@ -78,6 +78,19 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     end
   end
 
+  defmodule ObserveAfterBatch do
+    use Ash.Resource.Change
+
+    @impl true
+    def batch_change(changesets, _opts, _context), do: changesets
+
+    @impl true
+    def after_batch(_results, _opts, context) do
+      send(context.source_context.guard_after_batch_observer, :action_after_batch_ran)
+      :ok
+    end
+  end
+
   defmodule Source do
     use Ash.Resource,
       domain: Domain,
@@ -112,6 +125,11 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
       create :early_batch do
         accept [:target_id]
         change AshReferentialActions.Test.GuardGlobalBeforeBatch
+      end
+
+      create :with_after_batch do
+        accept [:target_id, :label]
+        change ObserveAfterBatch
       end
     end
 
@@ -281,6 +299,41 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     assert result.status == :error
     refute_receive :global_after_action_ran
     assert stored_count(tenant) == 0
+  end
+
+  test "action after_batch does not run ahead of a failing result guard", %{tenant: tenant} do
+    result =
+      Ash.bulk_create([%{label: "trigger_missing_target"}], Source, :with_after_batch,
+        tenant: tenant,
+        authorize?: false,
+        return_errors?: true,
+        context: %{guard_after_batch_observer: self()}
+      )
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "이미 보관되었습니다"
+    assert stored_count(tenant) == 0
+    refute_receive :action_after_batch_ran
+  end
+
+  test "action after_batch runs after individual guards accept live targets", %{tenant: tenant} do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      Ash.bulk_create(List.duplicate(%{target_id: live.id}, 3), Source, :with_after_batch,
+        tenant: tenant,
+        authorize?: false,
+        return_records?: true,
+        return_errors?: true,
+        context: %{guard_after_batch_observer: self()}
+      )
+
+    assert result.status == :success
+    assert length(result.records) == 3
+    assert stored_count(tenant) == 3
+    assert length(guard_queries()) == 6
+    assert_receive :action_after_batch_ran
   end
 
   test "distinct keys beyond required pagination are all found", %{tenant: tenant} do

@@ -4,6 +4,10 @@ The regular `mix test` suite uses ETS. PostgreSQL tests run when
 `ASH_RA_POSTGRES_PORT` is set and require a disposable local database named
 `guard_test`, with user `postgres` and password `guard-test`.
 
+CI supplies an isolated PostgreSQL service and always runs these tests, including
+the assertion that 5,000 creates with `batch_size: 100` execute 100 guard queries.
+Query counts, rather than elapsed time, detect batching regressions reliably.
+
 For example, start an isolated database (no mounted volumes):
 
 ```sh

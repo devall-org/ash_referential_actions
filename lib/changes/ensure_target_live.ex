@@ -25,6 +25,8 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   are checked at the original hook position. Global changes that only modify
   attributes do not disable batching; global `before_batch` callbacks still
   require individual checks because they run after this guard's `before_batch`.
+  Action `after_batch` callbacks also require individual checks so they cannot
+  run before a failing result guard.
   Atomic updates that leave guarded keys alone do not run batch callbacks or
   request result records for this guard.
 
@@ -123,7 +125,8 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
     Enum.any?(
       [:before_action, :after_action, :before_transaction, :around_action, :around_transaction],
       &(Map.get(changeset, &1) not in [nil, []])
-    ) or changeset.relationships not in [nil, %{}] or later_batch_hooks?(changeset)
+    ) or changeset.relationships not in [nil, %{}] or action_after_batch_hooks?(changeset) or
+      later_batch_hooks?(changeset)
   end
 
   defp without_guard_hooks(changeset) do
@@ -135,6 +138,20 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
           Enum.reject(changeset.after_action, fn hook -> hook == (&check_result_keys/2) end)
     }
   end
+
+  # Action after_batch callbacks precede this guard's after_batch. Keep the
+  # result check in after_action so a failure still prevents those callbacks.
+  defp action_after_batch_hooks?(%{action: %{changes: changes}}) do
+    Enum.any?(changes, fn
+      %{change: {module, _}} when module != __MODULE__ ->
+        module.has_batch_change?() and module.has_after_batch?()
+
+      _ ->
+        false
+    end)
+  end
+
+  defp action_after_batch_hooks?(_changeset), do: false
 
   # Action before_batch callbacks precede this guard, but resource-level ones
   # run after it. Their writes/hooks are not visible during our recheck, so keep
