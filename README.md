@@ -2,6 +2,14 @@
 
 Explicit referential actions for Ash relationships.
 
+## Installation
+
+Add the dependency to your `mix.exs`:
+
+```elixir
+{:ash_referential_actions, "~> 0.1.1"}
+```
+
 ## Why
 
 `belongs_to`, `has_many`, and `has_one` describe cardinality but not lifecycle. A related record may be owned, may prevent deletion, may lose its foreign key, or may require no lifecycle behavior. AshReferentialActions makes that choice mandatory and derives soft-archive and optional PostgreSQL behavior from it.
