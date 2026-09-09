@@ -48,28 +48,50 @@ defmodule AshReferentialActions.Query do
   # ignored where the data layer does not support that lock (e.g. ETS), so
   # the guard stays a plain application-level check there.
   def exists?(rel, filter, changeset, lock) do
+    rel
+    |> guard_query()
+    |> Ash.Query.do_filter(filter)
+    |> lock(lock)
+    |> Ash.exists?(read_opts(rel, changeset))
+  end
+
+  @doc false
+  # list! uses an unpaginated read, including for actions with required pagination.
+  # Unlike an aggregate, it can lock every matching row. It also selects the key
+  # explicitly and raises read errors just like exists? does.
+  def existing_keys(rel, values, changeset, lock_type) do
+    case values |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] ->
+        []
+
+      values ->
+        rel
+        |> guard_query()
+        |> Ash.Query.do_filter([{rel.destination_attribute, [in: values]}])
+        |> lock(lock_type)
+        |> Ash.list!(rel.destination_attribute, read_opts(rel, changeset))
+    end
+  end
+
+  defp read_opts(rel, changeset) do
+    [
+      domain: rel.domain || Ash.Resource.Info.domain(rel.destination) || changeset.domain,
+      authorize?: false,
+      tenant: changeset.tenant
+    ]
+  end
+
+  defp guard_query(rel) do
     base =
       rel.destination
       |> Ash.Query.new()
       |> Ash.Query.set_context(rel.context || %{})
       |> Ash.Query.set_context(%{ash_referential_actions_guard?: true})
 
-    query =
-      case guard_read_action(rel) do
-        nil -> base
-        action_name -> Ash.Query.for_read(base, action_name, rel.read_action_arguments || %{})
-      end
-
-    domain = rel.domain || Ash.Resource.Info.domain(rel.destination) || changeset.domain
-
-    query
-    |> Ash.Query.do_filter(filter)
-    |> lock(lock)
-    |> Ash.exists?(
-      domain: domain,
-      authorize?: false,
-      tenant: changeset.tenant
-    )
+    case guard_read_action(rel) do
+      nil -> base
+      action_name -> Ash.Query.for_read(base, action_name, rel.read_action_arguments || %{})
+    end
   end
 
   @doc false
