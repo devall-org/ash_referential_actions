@@ -110,7 +110,7 @@ defmodule AshReferentialActions.BulkGuardTest do
       )
 
     assert result.status == :error
-    assert inspect(result.errors) =~ "이미 보관되었습니다"
+    assert inspect(result.errors) =~ "does not exist or is already archived"
   end
 
   test "bulk create accepts live targets and rejects only missing/archived inputs without rollback" do
@@ -179,7 +179,9 @@ defmodule AshReferentialActions.BulkGuardTest do
     [changeset] = Guard.batch_change([changeset], [], %{})
     result = struct(RestrictLocker, id: Ash.UUID.generate(), target_id: Ash.UUID.generate())
     assert [{:error, message}] = Guard.after_batch([{changeset, result}], [], %{})
-    assert message == ":target 관계의 #{inspect(RestrictTarget)} 대상을 찾을 수 없거나 이미 보관되었습니다."
+
+    assert message ==
+             "The #{inspect(RestrictTarget)} target for relationship :target does not exist or is already archived."
   end
 
   test "atomic query updates opt out of batch callbacks" do
