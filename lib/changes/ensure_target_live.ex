@@ -21,7 +21,9 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
 
   Bulk batches without record hooks or managed relationships instead check
   keys together in `before_batch` and `after_batch`, once per relationship,
-  domain and tenant. Batches with hooks retain the individual checks so keys
+  domain and tenant. When only result hooks prevent full batching, the input
+  keys are checked together inside a transaction and result keys retain their
+  individual `after_action` checks. Other hooks retain individual checks so keys
   are checked at the original hook position. Global changes that only modify
   attributes do not disable batching; global `before_batch` callbacks still
   require individual checks because they run after this guard's `before_batch`.
@@ -77,19 +79,34 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   @impl true
   def before_batch(changesets, _opts, _context) do
     # Global changes have now run, so their direct attribute writes are visible.
-    # If they installed hooks, retain our already-positioned individual hooks.
+    # If they installed hooks, retain any guard hook whose position matters.
     individual? = Enum.any?(changesets, &individual_hooks?/1)
+
+    batch_before? =
+      individual? and changesets != [] and
+        Enum.all?(changesets, &guard_locks_held?/1) and
+        Enum.all?(changesets, &batch_before_safe?/1)
 
     changesets =
       Enum.map(changesets, fn changeset ->
         cond do
-          not batched?(changeset) -> changeset
-          individual? -> Ash.Changeset.put_context(changeset, @batch_mode, :individual)
-          true -> without_guard_hooks(changeset)
+          batch_before? ->
+            changeset
+            |> Ash.Changeset.put_context(@batch_mode, :batch_before)
+            |> without_before_guard_hook()
+
+          individual? ->
+            Ash.Changeset.put_context(changeset, @batch_mode, :individual)
+
+          batched?(changeset) ->
+            without_guard_hooks(changeset)
+
+          true ->
+            changeset
         end
       end)
 
-    errors = batch_errors(changesets, &changing_key/2)
+    errors = batch_errors(changesets, &changing_key/2, &batched_before?/1)
 
     Enum.with_index(changesets, fn changeset, index ->
       Enum.reduce(ordered_errors(errors, index), changeset, &Ash.Changeset.add_error(&2, &1))
@@ -98,7 +115,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
 
   @impl true
   def after_batch(changesets_and_results, _opts, _context) do
-    errors = batch_errors(changesets_and_results, &result_key/2)
+    errors = batch_errors(changesets_and_results, &result_key/2, &batched?/1)
 
     Enum.with_index(changesets_and_results, fn {_changeset, result}, index ->
       case ordered_errors(errors, index) do
@@ -116,6 +133,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   end
 
   defp batched?(changeset), do: changeset.context[@batch_mode] == :batch
+  defp batched_before?(changeset), do: changeset.context[@batch_mode] in [:batch, :batch_before]
 
   # Moving checks across user hooks can reject values that a hook would repair,
   # or allow subsequent hooks to run before a failure. Keep their original order.
@@ -127,6 +145,35 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
       &(Map.get(changeset, &1) not in [nil, []])
     ) or changeset.relationships not in [nil, %{}] or action_after_batch_hooks?(changeset) or
       later_batch_hooks?(changeset)
+  end
+
+  # All before_action hooks for the batch run before any result hooks. With no
+  # earlier record hooks or later before_batch callbacks, moving only the input
+  # lookup to before_batch preserves its position relative to user hooks.
+  # Keep the result hook because after_batch can run after user callbacks.
+  defp batch_before_safe?(changeset) do
+    changeset = without_guard_hooks(changeset)
+
+    Enum.all?(
+      [:before_action, :before_transaction, :around_action, :around_transaction],
+      &(Map.get(changeset, &1) in [nil, []])
+    ) and changeset.relationships in [nil, %{}] and not later_batch_hooks?(changeset)
+  end
+
+  defp guard_locks_held?(changeset) do
+    Ash.DataLayer.in_transaction?(changeset.resource) and
+      Enum.all?(guarded_rels(changeset.resource), fn rel ->
+        Ash.DataLayer.in_transaction?(rel.destination) and
+          Ash.DataLayer.data_layer_can?(rel.destination, {:lock, "FOR SHARE"})
+      end)
+  end
+
+  defp without_before_guard_hook(changeset) do
+    %{
+      changeset
+      | before_action:
+          Enum.reject(changeset.before_action, fn hook -> hook == (&check_changing_keys/1) end)
+    }
   end
 
   defp without_guard_hooks(changeset) do
@@ -179,7 +226,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
     if value != original_value(changeset, rel.source_attribute), do: value
   end
 
-  defp batch_errors(items, key) do
+  defp batch_errors(items, key, batched?) do
     items
     |> Enum.with_index()
     |> Enum.flat_map(fn {item, index} ->
@@ -189,7 +236,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
           changeset -> changeset
         end
 
-      if batched?(changeset) do
+      if batched?.(changeset) do
         for {rel, rel_index} <- Enum.with_index(guarded_rels(changeset.resource)),
             value = key.(item, rel),
             not is_nil(value),

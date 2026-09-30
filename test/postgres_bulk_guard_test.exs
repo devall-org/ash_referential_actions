@@ -290,6 +290,19 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     assert stored_count(tenant) == 0
   end
 
+  test "result guard catches a target archived in the same transaction after input check", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+
+    result =
+      bulk([%{target_id: live.id}], tenant, context: %{global_guard_test: {:archive, live}})
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "does not exist or is already archived"
+    assert stored_count(tenant) == 0
+  end
+
   test "global after_action does not run ahead of a failing result guard", %{tenant: tenant} do
     result =
       bulk([%{label: "trigger_missing_target"}], tenant,
@@ -316,7 +329,9 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     refute_receive :action_after_batch_ran
   end
 
-  test "action after_batch runs after individual guards accept live targets", %{tenant: tenant} do
+  test "action after_batch keeps individual result checks and batches input checks", %{
+    tenant: tenant
+  } do
     live = target(tenant)
     drain_queries()
 
@@ -332,8 +347,46 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     assert result.status == :success
     assert length(result.records) == 3
     assert stored_count(tenant) == 3
+    assert length(guard_queries()) == 4
+    assert_receive :action_after_batch_ran
+  end
+
+  test "without a transaction, action after_batch keeps individual input checks", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      Ash.bulk_create(List.duplicate(%{target_id: live.id}, 3), Source, :with_after_batch,
+        tenant: tenant,
+        authorize?: false,
+        return_records?: true,
+        return_errors?: true,
+        transaction: false,
+        context: %{guard_after_batch_observer: self()}
+      )
+
+    assert result.status == :success
     assert length(guard_queries()) == 6
     assert_receive :action_after_batch_ran
+  end
+
+  test "a before_action still keeps both checks at their individual positions", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      bulk(List.duplicate(%{target_id: live.id}, 3), tenant,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
+        end
+      )
+
+    assert result.status == :success
+    assert length(guard_queries()) == 6
   end
 
   test "distinct keys beyond required pagination are all found", %{tenant: tenant} do
