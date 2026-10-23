@@ -66,10 +66,15 @@ not truncate the keys being checked, and PostgreSQL reads retain `FOR SHARE` loc
 Batches with only result hooks or action-level `after_batch` callbacks can group
 the input checks when the target locks are held through the batch transaction;
 result checks still run per record at their original hook position. Batches with
-input hooks, managed relationships, or resource-level `before_batch` callbacks
-retain individual guard checks to preserve hook ordering. Ordinary resource-level
-changes (including direct attribute changes and `after_batch` callbacks) do not
-disable full batching. The guard reserves its original hook positions until
+only `before_action` hooks can instead group the result checks, keeping input
+checks at their original positions. For N successful writes with one guarded FK
+checked in both phases, either partial path uses N + 1 guard reads instead of 2N.
+If an input hook installs a result hook, the entire batch keeps individual result
+checks. Without a transaction or target lock support, partial batching is disabled.
+Managed relationships, transaction/around hooks, and resource-level `before_batch`
+callbacks retain individual guard checks to preserve hook ordering. Ordinary
+resource-level changes (including direct attribute changes and `after_batch`
+callbacks) do not disable full batching. The guard reserves its original hook positions until
 `before_batch`, so hooks installed by global changes cannot move ahead of it.
 Single actions retain their existing hooks. Atomic updates that do not change
 guarded keys do not run guard reads. Ash's transaction and error options continue

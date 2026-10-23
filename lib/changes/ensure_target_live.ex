@@ -23,8 +23,12 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   keys together in `before_batch` and `after_batch`, once per relationship,
   domain and tenant. When only result hooks prevent full batching, the input
   keys are checked together inside a transaction and result keys retain their
-  individual `after_action` checks. Other hooks retain individual checks so keys
-  are checked at the original hook position. Global changes that only modify
+  individual `after_action` checks. Batches with only `before_action` hooks keep
+  individual input checks and group the result checks. A tail hook on every
+  changeset confirms that no result hooks were added at runtime; one unsafe row
+  keeps result checks individual for the entire batch. These partial batch paths
+  require transactional target locks. Other hooks retain individual checks so
+  keys are checked at the original hook position. Global changes that only modify
   attributes do not disable batching; global `before_batch` callbacks still
   require individual checks because they run after this guard's `before_batch`.
   Action `after_batch` callbacks also require individual checks so they cannot
@@ -47,6 +51,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   use Ash.Resource.Change
 
   @batch_mode :ash_referential_actions_target_guard_mode
+  @result_batch :ash_referential_actions_result_guard_batch
 
   @impl true
   def change(changeset, _opts, _context) do
@@ -84,8 +89,22 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
 
     batch_before? =
       individual? and changesets != [] and
-        Enum.all?(changesets, &guard_locks_held?/1) and
+        Enum.all?(changesets, &can_hold_guard_locks?/1) and
         Enum.all?(changesets, &batch_before_safe?/1)
+
+    batch_after? =
+      individual? and not batch_before? and changesets != [] and
+        Enum.all?(changesets, &can_hold_guard_locks?/1) and
+        Enum.all?(changesets, &batch_after_safe?/1)
+
+    result_batch =
+      if batch_after? do
+        # Shared only by this batch, and garbage-collected with its changesets.
+        # Slot 1 counts unfinished before_action tails; slot 2 disables deferral.
+        state = :atomics.new(2, [])
+        :atomics.put(state, 1, length(changesets))
+        state
+      end
 
     changesets =
       Enum.map(changesets, fn changeset ->
@@ -94,6 +113,12 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
             changeset
             |> Ash.Changeset.put_context(@batch_mode, :batch_before)
             |> without_before_guard_hook()
+
+          batch_after? ->
+            changeset
+            |> Ash.Changeset.put_context(@batch_mode, :batch_after)
+            |> Ash.Changeset.put_context(@result_batch, result_batch)
+            |> Ash.Changeset.before_action(&prepare_batch_result_check/1)
 
           individual? ->
             Ash.Changeset.put_context(changeset, @batch_mode, :individual)
@@ -115,7 +140,7 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
 
   @impl true
   def after_batch(changesets_and_results, _opts, _context) do
-    errors = batch_errors(changesets_and_results, &result_key/2, &batched?/1)
+    errors = batch_errors(changesets_and_results, &result_key/2, &batched_after?/1)
 
     Enum.with_index(changesets_and_results, fn {_changeset, result}, index ->
       case ordered_errors(errors, index) do
@@ -134,6 +159,38 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
 
   defp batched?(changeset), do: changeset.context[@batch_mode] == :batch
   defp batched_before?(changeset), do: changeset.context[@batch_mode] in [:batch, :batch_before]
+
+  defp batched_after?(changeset) do
+    case changeset.context[@batch_mode] do
+      :batch ->
+        true
+
+      :batch_after ->
+        state = changeset.context[@result_batch]
+
+        :atomics.get(state, 1) == 0 and :atomics.get(state, 2) == 0 and
+          batch_after_safe?(changeset) and can_hold_guard_locks?(changeset)
+
+      _ ->
+        false
+    end
+  end
+
+  # Ash runs every row's before_action hooks before running any result hooks.
+  # Check at the tail, since a user hook can install result hooks dynamically.
+  # One unsafe row keeps every result guard in its original position, including
+  # guards on earlier rows whose failures must prevent that row's side effects.
+  # If a hook fails before this tail runs, the unfinished count prevents deferral.
+  defp prepare_batch_result_check(changeset) do
+    state = changeset.context[@result_batch]
+
+    unless batch_after_safe?(changeset) and can_hold_guard_locks?(changeset) do
+      :atomics.put(state, 2, 1)
+    end
+
+    :atomics.sub(state, 1, 1)
+    changeset
+  end
 
   # Moving checks across user hooks can reject values that a hook would repair,
   # or allow subsequent hooks to run before a failure. Keep their original order.
@@ -160,7 +217,24 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
     ) and changeset.relationships in [nil, %{}] and not later_batch_hooks?(changeset)
   end
 
-  defp guard_locks_held?(changeset) do
+  defp batch_after_safe?(changeset) do
+    changeset = without_guard_hooks(changeset)
+
+    # Manual actions can replace changesets after the before_action tail runs.
+    Enum.all?(
+      [
+        :after_action,
+        :before_transaction,
+        :around_action,
+        :around_transaction,
+        :authorize_results
+      ],
+      &(Map.get(changeset, &1) in [nil, []])
+    ) and changeset.relationships in [nil, %{}] and is_nil(changeset.action.manual) and
+      not action_after_batch_hooks?(changeset) and not later_batch_hooks?(changeset)
+  end
+
+  defp can_hold_guard_locks?(changeset) do
     Ash.DataLayer.in_transaction?(changeset.resource) and
       Enum.all?(guarded_rels(changeset.resource), fn rel ->
         Ash.DataLayer.in_transaction?(rel.destination) and
@@ -328,6 +402,14 @@ defmodule AshReferentialActions.Changes.EnsureTargetLive do
   end
 
   defp check_result_keys(changeset, result) do
+    if batched_after?(changeset) do
+      {:ok, result}
+    else
+      check_individual_result_keys(changeset, result)
+    end
+  end
+
+  defp check_individual_result_keys(changeset, result) do
     changeset.resource
     |> guarded_rels()
     |> Enum.reduce_while({:ok, result}, fn rel, {:ok, result} ->

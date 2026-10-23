@@ -48,11 +48,22 @@ defmodule AshReferentialActions.Query do
   # ignored where the data layer does not support that lock (e.g. ETS), so
   # the guard stays a plain application-level check there.
   def exists?(rel, filter, changeset, lock) do
-    rel
-    |> guard_query()
-    |> Ash.Query.do_filter(filter)
-    |> lock(lock)
-    |> Ash.exists?(read_opts(rel, changeset))
+    query =
+      rel
+      |> guard_query()
+      |> Ash.Query.do_filter(filter)
+      |> lock(lock)
+
+    if is_nil(lock) do
+      Ash.exists?(query, read_opts(rel, changeset))
+    else
+      # Ash.exists? strips query locks. Read a key so the requested row lock
+      # survives, including when the read action requires pagination.
+      query
+      |> Ash.Query.limit(1)
+      |> Ash.list!(rel.destination_attribute, read_opts(rel, changeset))
+      |> Enum.any?(fn _key -> true end)
+    end
   end
 
   @doc false

@@ -131,6 +131,12 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
         accept [:target_id, :label]
         change ObserveAfterBatch
       end
+
+      update :with_before do
+        accept [:target_id]
+        require_atomic? false
+        change before_action(fn changeset, _context -> changeset end)
+      end
     end
 
     changes do
@@ -372,7 +378,85 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
     assert_receive :action_after_batch_ran
   end
 
-  test "a before_action still keeps both checks at their individual positions", %{
+  test "a before_action keeps input checks individual and batches result checks", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      bulk(List.duplicate(%{target_id: live.id}, 16), tenant,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
+        end
+      )
+
+    assert result.status == :success
+    assert length(result.records) == 16
+    assert length(guard_queries()) == 17
+  end
+
+  test "before_action result checks group separately for each batch", %{tenant: tenant} do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      bulk(List.duplicate(%{target_id: live.id}, 7), tenant,
+        batch_size: 3,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
+        end
+      )
+
+    assert result.status == :success
+    assert length(result.records) == 7
+    queries = guard_queries()
+    assert length(queries) == 10
+    assert Enum.all?(queries, &String.contains?(&1, "FOR SHARE"))
+  end
+
+  test "individual input checks lock the target before later before_action hooks", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+
+    check_lock = fn changeset ->
+      probe =
+        Task.async(fn ->
+          Repo.query("SELECT id FROM guard_test_targets WHERE id::text = $1 FOR UPDATE NOWAIT", [
+            live.id
+          ])
+        end)
+
+      assert {:error, %Postgrex.Error{postgres: %{code: :lock_not_available}}} = Task.await(probe)
+      changeset
+    end
+
+    assert bulk([%{target_id: live.id}], tenant,
+             context: %{global_guard_test: {:before_callback, check_lock}}
+           ).status == :success
+  end
+
+  test "a late before_action changing the target to an archived row is rejected", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+    archived = target(tenant)
+    Ash.destroy!(archived, tenant: tenant, authorize?: false)
+    drain_queries()
+
+    result =
+      bulk(List.duplicate(%{target_id: live.id}, 3), tenant,
+        context: %{global_guard_test: {:before, archived.id}}
+      )
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "does not exist or is already archived"
+    assert stored_count(tenant) == 0
+    assert length(guard_queries()) == 4
+  end
+
+  test "result hooks installed during before_action retain individual result checks", %{
     tenant: tenant
   } do
     live = target(tenant)
@@ -380,6 +464,66 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
 
     result =
       bulk(List.duplicate(%{target_id: live.id}, 3), tenant,
+        context: %{global_guard_test: {:install_after, self()}}
+      )
+
+    assert result.status == :success
+    assert length(guard_queries()) == 6
+    for _ <- 1..3, do: assert_receive(:dynamic_after_action_ran)
+  end
+
+  test "a failing result guard still precedes a result hook installed during before_action", %{
+    tenant: tenant
+  } do
+    result =
+      bulk([%{label: "trigger_missing_target"}], tenant,
+        context: %{global_guard_test: {:install_after, self()}}
+      )
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "does not exist or is already archived"
+    refute_receive :dynamic_after_action_ran
+    assert stored_count(tenant) == 0
+  end
+
+  test "a later row installing a result hook prevents deferral for the entire batch", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+
+    result =
+      bulk(
+        [
+          %{target_id: live.id, label: "trigger_missing_target"},
+          %{target_id: live.id, label: "install_after"}
+        ],
+        tenant,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset ->
+            if Ash.Changeset.get_attribute(changeset, :label) == "install_after" do
+              Ash.Changeset.after_action(changeset, fn _changeset, result ->
+                send(self(), :later_row_after_action_ran)
+                {:ok, result}
+              end)
+            else
+              changeset
+            end
+          end)
+        end
+      )
+
+    assert result.status == :error
+    refute_receive :later_row_after_action_ran
+    assert stored_count(tenant) == 0
+  end
+
+  test "without a transaction, before_action keeps individual result checks", %{tenant: tenant} do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      bulk(List.duplicate(%{target_id: live.id}, 3), tenant,
+        transaction: false,
         transform_changeset: fn changeset ->
           Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
         end
@@ -387,6 +531,118 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
 
     assert result.status == :success
     assert length(guard_queries()) == 6
+  end
+
+  test "a dynamically prepended result hook changing the FK is still checked", %{tenant: tenant} do
+    live = target(tenant)
+    archived = target(tenant)
+    Ash.destroy!(archived, tenant: tenant, authorize?: false)
+
+    result =
+      bulk([%{target_id: live.id}], tenant,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset ->
+            Ash.Changeset.after_action(
+              changeset,
+              fn _changeset, result ->
+                {:ok, %{result | target_id: archived.id}}
+              end,
+              prepend?: true
+            )
+          end)
+        end
+      )
+
+    assert result.status == :error
+    assert inspect(result.errors) =~ "does not exist or is already archived"
+    assert stored_count(tenant) == 0
+  end
+
+  test "result authorization added during before_action stays after a failing guard", %{
+    tenant: tenant
+  } do
+    result =
+      bulk([%{label: "trigger_missing_target"}], tenant,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset ->
+            Ash.Changeset.authorize_results(changeset, fn _changeset, results ->
+              send(self(), :result_authorization_ran)
+              {:ok, results}
+            end)
+          end)
+        end
+      )
+
+    assert result.status == :error
+    refute_receive :result_authorization_ran
+    assert stored_count(tenant) == 0
+  end
+
+  test "before_action with action after_batch retains result guard ordering", %{tenant: tenant} do
+    result =
+      Ash.bulk_create([%{label: "trigger_missing_target"}], Source, :with_after_batch,
+        tenant: tenant,
+        authorize?: false,
+        return_errors?: true,
+        context: %{guard_after_batch_observer: self()},
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
+        end
+      )
+
+    assert result.status == :error
+    refute_receive :action_after_batch_ran
+    assert stored_count(tenant) == 0
+  end
+
+  test "batched result errors preserve partial success with rollback disabled", %{tenant: tenant} do
+    live = target(tenant)
+    drain_queries()
+
+    result =
+      bulk(
+        [%{target_id: live.id, label: "trigger_missing_target"}, %{target_id: live.id}],
+        tenant,
+        rollback_on_error?: false,
+        stop_on_error?: false,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
+        end
+      )
+
+    assert result.status == :partial_success
+    assert result.error_count == 1
+    assert [%{target_id: id}] = result.records
+    assert id == live.id
+    assert stored_count(tenant) == 2
+    assert length(guard_queries()) == 3
+  end
+
+  test "an unfinished input hook disables result batching only for its own batch", %{
+    tenant: tenant
+  } do
+    live = target(tenant)
+    archived = target(tenant)
+    Ash.destroy!(archived, tenant: tenant, authorize?: false)
+    drain_queries()
+
+    inputs = [%{target_id: archived.id} | List.duplicate(%{target_id: live.id}, 5)]
+
+    result =
+      bulk(inputs, tenant,
+        batch_size: 3,
+        rollback_on_error?: false,
+        stop_on_error?: false,
+        transform_changeset: fn changeset ->
+          Ash.Changeset.before_action(changeset, fn changeset -> changeset end)
+        end
+      )
+
+    assert result.status == :partial_success
+    assert result.error_count == 1
+    assert length(result.records) == 5
+    assert stored_count(tenant) == 5
+    assert length(guard_queries()) == 9
   end
 
   test "distinct keys beyond required pagination are all found", %{tenant: tenant} do
@@ -493,9 +749,10 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
 
   test "a before_action repairs invalid input before it is checked", %{tenant: tenant} do
     live = target(tenant)
+    drain_queries()
 
     result =
-      bulk([%{target_id: Ash.UUID.generate()}], tenant,
+      bulk(List.duplicate(%{target_id: Ash.UUID.generate()}, 3), tenant,
         transform_changeset: fn changeset ->
           Ash.Changeset.before_action(changeset, fn changeset ->
             Ash.Changeset.force_change_attribute(changeset, :target_id, live.id)
@@ -504,8 +761,31 @@ defmodule AshReferentialActions.PostgresBulkGuardTest do
       )
 
     assert result.status == :success
-    assert [%{target_id: id}] = result.records
-    assert id == live.id
+    assert length(result.records) == 3
+    assert Enum.all?(result.records, &(&1.target_id == live.id))
+    assert length(guard_queries()) == 4
+  end
+
+  test "stream updates with before_action batch only the result checks", %{tenant: tenant} do
+    old = target(tenant)
+    new = target(tenant)
+    records = bulk(List.duplicate(%{target_id: old.id}, 7), tenant).records
+    drain_queries()
+
+    result =
+      Ash.bulk_update(records, :with_before, %{target_id: new.id},
+        tenant: tenant,
+        authorize?: false,
+        strategy: [:stream],
+        batch_size: 3,
+        return_records?: true,
+        return_errors?: true
+      )
+
+    assert result.status == :success
+    assert length(result.records) == 7
+    assert Enum.all?(result.records, &(&1.target_id == new.id))
+    assert length(guard_queries()) == 10
   end
 
   test "managed belongs_to keys remain guarded", %{tenant: tenant} do
