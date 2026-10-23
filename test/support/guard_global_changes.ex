@@ -13,10 +13,32 @@ defmodule AshReferentialActions.Test.GuardGlobalChange do
           Ash.Changeset.force_change_attribute(changeset, :target_id, target_id)
         end)
 
+      {:before_callback, callback} ->
+        Ash.Changeset.before_action(changeset, callback)
+
+      {:archive, target} ->
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          Ash.destroy!(target,
+            tenant: changeset.tenant,
+            authorize?: false,
+            return_notifications?: true
+          )
+
+          changeset
+        end)
+
       {:after, observer} ->
         Ash.Changeset.after_action(changeset, fn _changeset, result ->
           send(observer, :global_after_action_ran)
           {:ok, result}
+        end)
+
+      {:install_after, observer} ->
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          Ash.Changeset.after_action(changeset, fn _changeset, result ->
+            send(observer, :dynamic_after_action_ran)
+            {:ok, result}
+          end)
         end)
 
       _ ->
